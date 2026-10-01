@@ -11,7 +11,7 @@ export function normalizeEmail(raw: string): string {
 export function normalizePhone(raw: string): { e164: string | null; valid: boolean } {
   let s = raw.trim();
   // Strip extension markers before processing (ext., x, durchwahl, dw) at the end
-  s = s.replace(/\s*(?:ext\.?|x|durchwahl|dw\.?)\s*\d+\s*$/i, '');
+  s = s.replace(/(?<=\d)\s*(?:ext\.?|x|durchwahl|dw\.?)\s*\d+\s*$/i, '');
   s = s.replace(/[^\d+]/g, '');
   s = s.replace(/(?!^)\+/g, '');
   if (s.startsWith('00')) s = `+${s.slice(2)}`;

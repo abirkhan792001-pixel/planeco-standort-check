@@ -33,6 +33,11 @@ describe('normalizePhone (case samples)', () => {
     expect(normalizePhone('040 123456 DW 12').e164).toBe('+4940123456');
   });
 
+  it('does not strip labels that happen to contain marker letters', () => {
+    expect(normalizePhone('Fax 040123456').e164).toBe('+4940123456');
+    expect(normalizePhone('Tel 040 123456').e164).toBe('+4940123456');
+  });
+
   it('preserves hyphens in normal phone number formatting', () => {
     expect(normalizePhone('(040) 55-51-23-45').e164).toBe('+494055512345');
   });
