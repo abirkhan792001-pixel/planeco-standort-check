@@ -9,7 +9,10 @@ export function normalizeEmail(raw: string): string {
  * then parses with default country DE. `valid` is libphonenumber's opinion and is stored as a flag only.
  */
 export function normalizePhone(raw: string): { e164: string | null; valid: boolean } {
-  let s = raw.trim().replace(/[^\d+]/g, '');
+  let s = raw.trim();
+  // Strip extension markers before processing (ext., x, durchwahl, dw) at the end
+  s = s.replace(/\s*(?:ext\.?|x|durchwahl|dw\.?)\s*\d+\s*$/i, '');
+  s = s.replace(/[^\d+]/g, '');
   s = s.replace(/(?!^)\+/g, '');
   if (s.startsWith('00')) s = `+${s.slice(2)}`;
   const digits = s.replace(/\D/g, '');
@@ -23,13 +26,13 @@ export function normalizePhone(raw: string): { e164: string | null; valid: boole
 }
 
 export function foldGerman(s: string): string {
-  return s.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss');
+  return s.normalize('NFC').toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss');
 }
 
 /** "Osterstraße" / "Osterstr." / "Oster Straße" → "osterstrasse"; "Strandweg" stays "strandweg". */
 export function normalizeStreet(s: string): string {
   return foldGerman(s.trim())
-    .replace(/(strasse|str\.?)(?=[\s,-]|$)/g, 'strasse')
+    .replace(/(strasse|str\.?)(?=[^a-z]|$)/g, 'strasse')
     .replace(/[^a-z0-9]/g, '');
 }
 

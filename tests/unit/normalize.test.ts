@@ -25,6 +25,17 @@ describe('normalizePhone (case samples)', () => {
   it('never throws on garbage', () => {
     expect(normalizePhone('abc').e164).toBeNull();
   });
+
+  it('strips extension markers before processing', () => {
+    expect(normalizePhone('040 123456 ext. 12').e164).toBe('+4940123456');
+    expect(normalizePhone('040123456 x12').e164).toBe('+4940123456');
+    expect(normalizePhone('040 123456 Durchwahl 12').e164).toBe('+4940123456');
+    expect(normalizePhone('040 123456 DW 12').e164).toBe('+4940123456');
+  });
+
+  it('preserves hyphens in normal phone number formatting', () => {
+    expect(normalizePhone('(040) 55-51-23-45').e164).toBe('+494055512345');
+  });
 });
 
 describe('normalizeEmail', () => {
@@ -37,6 +48,14 @@ describe('normalizeStreet', () => {
   });
   it('does not touch "str" inside a word', () => expect(normalizeStreet('Strandweg')).toBe('strandweg'));
   it('folds umlauts', () => expect(normalizeStreet('Am Mühlenteich')).toBe('ammuehlenteich'));
+  it('handles "str." before digits', () => expect(normalizeStreet('Hauptstr.14')).toBe('hauptstrasse14'));
+  it('handles "str." before punctuation', () => expect(normalizeStreet('Hauptstr./Ecke')).toBe('hauptstrasseecke'));
+  it('handles "Strandstraße" normalization', () => expect(normalizeStreet('Strandstraße')).toBe('strandstrasse'));
+  it('handles decomposed umlauts with NFC normalization', () => {
+    // Create decomposed ü (u + combining diaeresis)
+    const decomposed = 'Mühlenweg';
+    expect(normalizeStreet(decomposed)).toBe('muehlenweg');
+  });
 });
 
 describe('normalizeHouseNumber', () => {
@@ -52,6 +71,12 @@ describe('buildAddressKey', () => {
     expect(buildAddressKey({ street: 'x', houseNumber: '1', postalCode: '01067', addressUnknown: true })).toBeNull();
     expect(buildAddressKey({ street: '', houseNumber: '1', postalCode: '01067', addressUnknown: false })).toBeNull();
     expect(buildAddressKey({ street: 'Weg', houseNumber: '1', postalCode: '', addressUnknown: false })).toBeNull();
+  });
+  it('builds the same key for "Hauptstr." as for "Hauptstraße"', () => {
+    const key1 = buildAddressKey({ street: 'Hauptstr.', houseNumber: '14', postalCode: '01067', addressUnknown: false });
+    const key2 = buildAddressKey({ street: 'Hauptstraße', houseNumber: '14', postalCode: '01067', addressUnknown: false });
+    expect(key1).toBe(key2);
+    expect(key1).toBe('hauptstrasse|14|01067');
   });
 });
 
