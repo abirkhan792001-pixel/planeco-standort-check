@@ -1,4 +1,4 @@
-import { EMAIL_MAX_AGE_HOURS, MAX_EMAIL_ATTEMPTS, isReservedEmailDomain } from '@/lib/config/app';
+import { EMAIL_CLAIM_STALE_MINUTES, EMAIL_MAX_AGE_HOURS, MAX_EMAIL_ATTEMPTS, isReservedEmailDomain } from '@/lib/config/app';
 import type { LeadRow } from '@/lib/leads/types';
 
 export type SendDecision =
@@ -18,8 +18,14 @@ export function shouldSendConfirmation(
   return { send: true };
 }
 
-export function canAttemptEmail(lead: Pick<LeadRow, 'email_status' | 'email_attempts'>): boolean {
-  return (lead.email_status === 'pending' || lead.email_status === 'failed') && lead.email_attempts < MAX_EMAIL_ATTEMPTS;
+export function canAttemptEmail(lead: Pick<LeadRow, 'email_status' | 'email_attempts' | 'email_claimed_at'>, now: Date): boolean {
+  if (lead.email_attempts >= MAX_EMAIL_ATTEMPTS) return false;
+  if (lead.email_status === 'pending' || lead.email_status === 'failed') return true;
+  if (lead.email_status === 'sending') {
+    const claimed = lead.email_claimed_at ? Date.parse(lead.email_claimed_at) : 0;
+    return claimed < now.getTime() - EMAIL_CLAIM_STALE_MINUTES * 60_000;
+  }
+  return false;
 }
 
 export function escapeHtml(s: string): string {

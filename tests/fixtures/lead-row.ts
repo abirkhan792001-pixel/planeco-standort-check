@@ -12,7 +12,7 @@ export function makeLeadRow(o: Partial<LeadRow> = {}): LeadRow {
     landing_path: '/', referrer: null, device_type: 'mobile',
     duplicate_of: null, duplicate_reason: null, related_lead_id: null, spam_suspected: false, spam_reason: null,
     status: 'neu', disqualify_reason: null, assigned_to: null, assigned_at: null, status_changed_at: null, sales_note: null,
-    email_status: 'pending', email_attempts: 0, email_last_error: null, email_skip_reason: null, email_sent_at: null,
+    email_status: 'pending', email_attempts: 0, email_last_error: null, email_skip_reason: null, email_sent_at: null, email_claimed_at: null,
     enrichment_status: 'pending', enrichment_attempts: 0, enrichment_last_error: null, enriched_at: null,
     geo_precision: null, geo_lat: null, geo_lon: null, geo_municipality: null, geo_municipality_key: null,
     geo_district: null, geo_state_code: null, geo_found_postcode: null, geo_flags: [], geo_candidates: null, geo_raw: null,

@@ -48,11 +48,20 @@ describe('renderConfirmation', () => {
 });
 
 describe('canAttemptEmail', () => {
+  const t = new Date('2026-10-01T12:00:00Z');
+  const L = (email_status: 'pending' | 'failed' | 'done' | 'skipped' | 'sending', email_attempts: number, email_claimed_at: string | null = null) =>
+    ({ email_status, email_attempts, email_claimed_at });
   it('allows pending/failed below the cap only', () => {
-    expect(canAttemptEmail({ email_status: 'pending', email_attempts: 0 })).toBe(true);
-    expect(canAttemptEmail({ email_status: 'failed', email_attempts: 2 })).toBe(true);
-    expect(canAttemptEmail({ email_status: 'failed', email_attempts: 3 })).toBe(false);
-    expect(canAttemptEmail({ email_status: 'done', email_attempts: 0 })).toBe(false);
-    expect(canAttemptEmail({ email_status: 'skipped', email_attempts: 0 })).toBe(false);
+    expect(canAttemptEmail(L('pending', 0), t)).toBe(true);
+    expect(canAttemptEmail(L('failed', 2), t)).toBe(true);
+    expect(canAttemptEmail(L('failed', 3), t)).toBe(false);
+    expect(canAttemptEmail(L('done', 0), t)).toBe(false);
+    expect(canAttemptEmail(L('skipped', 0), t)).toBe(false);
+  });
+  it('rejects a fresh sending lead, accepts a stale one', () => {
+    expect(canAttemptEmail(L('sending', 1, '2026-10-01T11:55:00Z'), t)).toBe(false);
+    expect(canAttemptEmail(L('sending', 1, '2026-10-01T11:49:00Z'), t)).toBe(true);
+    expect(canAttemptEmail(L('sending', 1, null), t)).toBe(true);
+    expect(canAttemptEmail(L('sending', 3, '2026-10-01T11:00:00Z'), t)).toBe(false);
   });
 });

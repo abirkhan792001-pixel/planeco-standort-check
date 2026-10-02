@@ -1,6 +1,6 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { emailDomain, isReservedEmailDomain } from '@/lib/config/app';
+import { EMAIL_CLAIM_STALE_MINUTES, emailDomain, isReservedEmailDomain } from '@/lib/config/app';
 import { canAttemptEmail, renderConfirmation, shouldSendConfirmation } from '@/lib/email/confirmation';
 import { hasMx } from '@/lib/email/mx';
 import { sendTransactional } from '@/lib/email/brevo';
@@ -19,15 +19,25 @@ function logDbError(what: string, id: string, error: { code?: string; message: s
   console.error(what, id, { code: error.code, message: error.message });
 }
 
+function errInfo(err: unknown) {
+  const e = err as { code?: string; message?: string } | null;
+  return { code: e?.code, message: e?.message ?? String(err) };
+}
+
 export async function processConfirmation(db: SupabaseClient, id: string, now: Date): Promise<void> {
   const lead = await loadLead(db, id);
   if (lead.email_status === 'done' || lead.email_status === 'skipped') return;
-  if (!canAttemptEmail(lead)) return;
+  if (!canAttemptEmail(lead, now)) return;
 
-  // Atomic claim: email_attempts is an optimistic lock, so only one worker proceeds.
+  // Atomic claim: 'sending' + optimistic attempts lock, so only one worker proceeds.
+  // A crashed worker leaves 'sending' behind; the lease expires after EMAIL_CLAIM_STALE_MINUTES.
   const attempts = lead.email_attempts + 1;
-  const { data: claimed, error: claimError } = await db.from('leads').update({ email_attempts: attempts })
-    .eq('id', id).eq('email_attempts', lead.email_attempts).in('email_status', ['pending', 'failed']).select('id');
+  const staleBefore = new Date(now.getTime() - EMAIL_CLAIM_STALE_MINUTES * 60_000).toISOString();
+  const { data: claimed, error: claimError } = await db.from('leads')
+    .update({ email_status: 'sending', email_claimed_at: now.toISOString(), email_attempts: attempts })
+    .eq('id', id).eq('email_attempts', lead.email_attempts)
+    .or(`email_status.in.(pending,failed),and(email_status.eq.sending,email_claimed_at.lt.${staleBefore})`)
+    .select('id');
   if (claimError) { logDbError('email claim failed', id, claimError); return; }
   if (!claimed || claimed.length === 0) return;
 
@@ -90,9 +100,9 @@ export async function runSideEffects(id: string): Promise<void> {
     try {
       await processConfirmation(db, id, new Date());
     } catch (err) {
-      console.error('confirmation step crashed', id, err);
+      console.error('confirmation step crashed', id, errInfo(err));
     }
   } catch (err) {
-    console.error('side effects setup failed', id, err);
+    console.error('side effects setup failed', id, errInfo(err));
   }
 }

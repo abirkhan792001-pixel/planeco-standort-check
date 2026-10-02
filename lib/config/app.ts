@@ -2,6 +2,7 @@ export const PRIVACY_NOTICE_VERSION = '2026-09-v1';
 export const MIN_FILL_MS = 3000;
 export const DUPLICATE_WINDOW_DAYS = 90;
 export const MAX_EMAIL_ATTEMPTS = 3;
+export const EMAIL_CLAIM_STALE_MINUTES = 10;
 export const MAX_ENRICHMENT_ATTEMPTS = 3;
 export const EMAIL_MAX_AGE_HOURS = 24;
 export const ENRICHMENT_MAX_AGE_DAYS = 7;

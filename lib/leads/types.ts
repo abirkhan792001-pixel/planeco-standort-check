@@ -6,7 +6,7 @@ export type DisqualifyReason = (typeof DISQUALIFY_REASONS)[number];
 
 export const TERMINAL_STATUSES: readonly LeadStatus[] = ['gewonnen', 'verloren', 'nicht_qualifiziert'];
 
-export type JobStatus = 'pending' | 'done' | 'failed' | 'skipped';
+export type JobStatus = 'pending' | 'sending' | 'done' | 'failed' | 'skipped';
 
 export const PROJECT_TYPES = ['neubau', 'anbau', 'umbau', 'sanierung', 'sonstiges'] as const;
 export type ProjectType = (typeof PROJECT_TYPES)[number];
@@ -70,6 +70,7 @@ export type LeadRow = {
   email_last_error: string | null;
   email_skip_reason: string | null;
   email_sent_at: string | null;
+  email_claimed_at: string | null;
   enrichment_status: JobStatus;
   enrichment_attempts: number;
   enrichment_last_error: string | null;

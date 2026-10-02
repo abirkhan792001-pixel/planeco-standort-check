@@ -7,9 +7,9 @@ export class BrevoError extends Error {
   }
 }
 
-/** 4xx (except 429 rate limit) will never succeed on retry. */
+/** 4xx will never succeed on retry, except 429 (rate limit) and 401/403 (API key/config problems we can fix). */
 export function isPermanentBrevoError(err: unknown): boolean {
-  return err instanceof BrevoError && err.status >= 400 && err.status < 500 && err.status !== 429;
+  return err instanceof BrevoError && err.status >= 400 && err.status < 500 && ![401, 403, 429].includes(err.status);
 }
 
 const CONTROL = /[\u0000-\u001f\u007f]+/g;
