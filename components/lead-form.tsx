@@ -52,6 +52,7 @@ export function LeadForm() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState<string | null>(null);
+  const [ready, setReady] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const alertRef = useRef<HTMLDivElement>(null);
   const successRef = useRef<HTMLHeadingElement>(null);
@@ -59,6 +60,7 @@ export function LeadForm() {
 
   useEffect(() => {
     setAttr(captureAttribution(window.location.search, document.referrer, window.location.pathname));
+    setReady(true);
   }, []);
 
   const clearError = (key: string) => setErrors((e) => {
@@ -172,7 +174,7 @@ export function LeadForm() {
   });
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} noValidate className="space-y-8">
+    <form ref={formRef} method="post" onSubmit={onSubmit} noValidate className="space-y-8">
       {Object.keys(errors).length > 0 && (
         <div ref={alertRef} tabIndex={-1} role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{errors.form ?? "Bitte prüfen Sie die markierten Felder."}</div>
       )}
@@ -266,9 +268,9 @@ export function LeadForm() {
       {status === 'error' && message && <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{message}</div>}
 
       <div className="space-y-3">
-        <button type="submit" disabled={status === 'submitting'}
+        <button type="submit" disabled={!ready || status === 'submitting'}
           className="min-h-12 w-full rounded-lg bg-emerald-800 px-4 text-base font-semibold text-white disabled:opacity-60">
-          {status === 'submitting' ? 'Wird gesendet …' : 'Kostenlosen Standort-Check anfordern'}
+          {!ready ? 'Wird geladen …' : status === 'submitting' ? 'Wird gesendet …' : 'Kostenlosen Standort-Check anfordern'}
         </button>
         <p className="text-xs text-stone-500">
           Wir verwenden Ihre Angaben ausschließlich zur Bearbeitung Ihrer Anfrage. Details in unseren{' '}
