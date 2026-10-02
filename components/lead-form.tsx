@@ -18,6 +18,8 @@ const EMPTY: Values = {
   firstName: '', lastName: '', phone: '', email: '', reachability: [], website: '',
 };
 
+const PAGE_ORDER = ['addressUnknown', 'postalCode', 'city', 'street', 'houseNumber', 'plotNote', 'projectType', 'firstName', 'lastName', 'phone', 'email', 'reachability'];
+
 const inputCls = 'mt-1 block w-full rounded-lg border border-stone-300 bg-white px-3 py-3 text-base focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 aria-[invalid=true]:border-red-600';
 
 function Field(props: { id: string; label: string; error?: string; hint?: string; children: React.ReactNode }) {
@@ -51,17 +53,35 @@ export function LeadForm() {
   const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const alertRef = useRef<HTMLDivElement>(null);
+  const successRef = useRef<HTMLHeadingElement>(null);
+  const [focusSeq, setFocusSeq] = useState(0);
 
   useEffect(() => {
     setAttr(captureAttribution(window.location.search, document.referrer, window.location.pathname));
   }, []);
 
-  const set = <K extends keyof Values>(key: K, value: Values[K]) => setV((s) => ({ ...s, [key]: value }));
+  const clearError = (key: string) => setErrors((e) => {
+    if (!(key in e) && !('form' in e)) return e;
+    const { [key]: _k, form: _f, ...rest } = e;
+    void _k; void _f;
+    return rest;
+  });
+  const set = <K extends keyof Values>(key: K, value: Values[K]) => {
+    setV((s) => ({ ...s, [key]: value }));
+    clearError(key);
+  };
+  const setPostalCode = (value: string) => {
+    setV((s) => (s.postalCode === value ? s : { ...s, postalCode: value, city: '' }));
+    clearError('postalCode');
+    clearError('city');
+  };
 
   useEffect(() => {
     if (!/^\d{5}$/.test(v.postalCode)) {
       setLocalities([]);
       setPlzWarning(null);
+      setV((s) => (s.city === '' ? s : { ...s, city: '' }));
       return;
     }
     const ctrl = new AbortController();
@@ -73,17 +93,30 @@ export function LeadForm() {
         if (unique.length === 0) setPlzWarning('PLZ nicht gefunden – bitte prüfen.');
         else {
           setPlzWarning(null);
-          if (unique.length === 1) setV((s) => ({ ...s, city: unique[0].name }));
+          setV((s) => ({
+            ...s,
+            city: unique.length === 1 ? unique[0].name : unique.some((l) => l.name === s.city) ? s.city : '',
+          }));
         }
       })
       .catch(() => { /* lookup is a convenience; free input stays possible */ });
     return () => ctrl.abort();
   }, [v.postalCode]);
 
-  function focusFirstError(errs: Record<string, string>) {
-    const first = Object.keys(errs)[0];
-    if (first) formRef.current?.querySelector<HTMLElement>(`[name="${first}"]`)?.focus();
-  }
+  useEffect(() => {
+    if (focusSeq === 0) return;
+    for (const k of PAGE_ORDER) {
+      if (!errors[k]) continue;
+      const el = formRef.current?.querySelector<HTMLElement>(`[name="${k}"], [data-field="${k}"]`);
+      if (el) { el.focus(); return; }
+    }
+    alertRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusSeq]);
+
+  useEffect(() => {
+    if (status === 'success') successRef.current?.focus();
+  }, [status]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,7 +126,7 @@ export function LeadForm() {
     if (!local.success) {
       const errs = fieldErrors(local.error);
       setErrors(errs);
-      focusFirstError(errs);
+      setFocusSeq((n) => n + 1);
       return;
     }
     setErrors({});
@@ -109,7 +142,7 @@ export function LeadForm() {
       if (res.status === 422) {
         const json = (await res.json()) as { errors?: Record<string, string> };
         setErrors(json.errors ?? {});
-        focusFirstError(json.errors ?? {});
+        setFocusSeq((n) => n + 1);
         setStatus('idle');
         return;
       }
@@ -125,20 +158,23 @@ export function LeadForm() {
   if (status === 'success') {
     return (
       <div role="status" className="rounded-2xl bg-emerald-50 p-6 text-stone-900">
-        <h2 className="text-xl font-semibold">Vielen Dank, {v.firstName}!</h2>
-        <p className="mt-2">Wir haben Ihre Anfrage erhalten. Eine Bestätigung ist unterwegs an <strong>{v.email}</strong> – bitte schauen Sie auch im Spam-Ordner nach.</p>
+        <h2 ref={successRef} tabIndex={-1} className="text-xl font-semibold outline-none">Vielen Dank, {v.firstName}!</h2>
+        <p className="mt-2">Wir haben Ihre Anfrage erhalten. Wir senden Ihnen eine Bestätigung an <strong>{v.email}</strong>. Falls sie nicht ankommt, schauen Sie bitte auch im Spam-Ordner nach.</p>
         <p className="mt-2">Unser Team prüft Ihren Standort und meldet sich in der Regel am nächsten Werktag telefonisch bei Ihnen.</p>
       </div>
     );
   }
 
   const err = (k: string) => errors[k];
-  const aria = (k: string) => ({ 'aria-invalid': Boolean(err(k)), 'aria-describedby': err(k) ? `${k}-error` : undefined });
+  const aria = (k: string, hint?: string | null) => ({
+    'aria-invalid': Boolean(err(k)),
+    'aria-describedby': err(k) ? `${k}-error` : hint ? `${k}-hint` : undefined,
+  });
 
   return (
     <form ref={formRef} onSubmit={onSubmit} noValidate className="space-y-8">
       {Object.keys(errors).length > 0 && (
-        <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{errors.form ?? "Bitte prüfen Sie die markierten Felder."}</div>
+        <div ref={alertRef} tabIndex={-1} role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{errors.form ?? "Bitte prüfen Sie die markierten Felder."}</div>
       )}
 
       <fieldset className="space-y-4">
@@ -154,7 +190,7 @@ export function LeadForm() {
             <div className="grid grid-cols-[7rem_1fr] gap-3">
               <Field id="postalCode" label="PLZ" error={err('postalCode')} hint={plzWarning ?? undefined}>
                 <input id="postalCode" name="postalCode" inputMode="numeric" autoComplete="off" maxLength={5} className={inputCls}
-                  value={v.postalCode} onChange={(e) => set('postalCode', e.target.value.replace(/\D/g, ''))} {...aria('postalCode')} />
+                  value={v.postalCode} onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, ''))} {...aria('postalCode', plzWarning)} />
               </Field>
               <Field id="city" label="Ort" error={err('city')}>
                 {localities.length > 1 ? (
@@ -184,8 +220,8 @@ export function LeadForm() {
         </Field>
 
         <div>
-          <p className="text-sm font-medium text-stone-800">Vorhaben (optional)</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <p id="projectType-label" className="text-sm font-medium text-stone-800">Vorhaben (optional)</p>
+          <div role="group" aria-labelledby="projectType-label" data-field="projectType" tabIndex={-1} className="mt-2 flex flex-wrap gap-2">
             {PROJECT_TYPES.map((t) => (
               <Chip key={t} active={v.projectType === t} onClick={() => set('projectType', v.projectType === t ? null : t)}>{PROJECT_TYPE_LABELS[t]}</Chip>
             ))}
@@ -210,8 +246,8 @@ export function LeadForm() {
           <input id="email" name="email" type="email" autoComplete="email" className={inputCls} value={v.email} onChange={(e) => set('email', e.target.value)} {...aria('email')} />
         </Field>
         <div>
-          <p className="text-sm font-medium text-stone-800">Wann sind Sie gut erreichbar? (optional)</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <p id="reachability-label" className="text-sm font-medium text-stone-800">Wann sind Sie gut erreichbar? (optional)</p>
+          <div role="group" aria-labelledby="reachability-label" data-field="reachability" tabIndex={-1} className="mt-2 flex flex-wrap gap-2">
             {REACHABILITY.map((r) => (
               <Chip key={r} active={v.reachability.includes(r)}
                 onClick={() => set('reachability', v.reachability.includes(r) ? v.reachability.filter((x) => x !== r) : [...v.reachability, r])}>
@@ -222,9 +258,9 @@ export function LeadForm() {
         </div>
       </fieldset>
 
-      <div aria-hidden="true" className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
+      <div aria-hidden="true" inert className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
         <label htmlFor="website">Website</label>
-        <input id="website" name="website" tabIndex={-1} autoComplete="off" value={v.website} onChange={(e) => set('website', e.target.value)} />
+        <input id="website" name="website" tabIndex={-1} autoComplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" value={v.website} onChange={(e) => set('website', e.target.value)} />
       </div>
 
       {status === 'error' && message && <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{message}</div>}
