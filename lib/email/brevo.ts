@@ -1,4 +1,5 @@
 import 'server-only';
+import { BrevoError } from './errors';
 
 export type Mail = { to: { email: string; name?: string }; subject: string; html?: string; text: string; tags?: string[] };
 
@@ -20,7 +21,7 @@ export async function sendTransactional(mail: Mail): Promise<{ messageId: string
     }),
     signal: AbortSignal.timeout(8000),
   });
-  if (!res.ok) throw new Error(`brevo ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) throw new BrevoError(res.status, `brevo ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const json = (await res.json()) as { messageId?: string };
   return { messageId: json.messageId ?? '' };
 }

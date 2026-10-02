@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderConfirmation, shouldSendConfirmation, escapeHtml } from '@/lib/email/confirmation';
+import { renderConfirmation, shouldSendConfirmation, escapeHtml, canAttemptEmail } from '@/lib/email/confirmation';
 import { makeLeadRow } from '../fixtures/lead-row';
 
 const now = new Date('2026-10-01T08:05:00Z');
@@ -45,4 +45,14 @@ describe('renderConfirmation', () => {
     expect(m.text).toContain('Case Study');
   });
   it('escapeHtml covers quotes', () => expect(escapeHtml(`"'&`)).toBe('&quot;&#39;&amp;'));
+});
+
+describe('canAttemptEmail', () => {
+  it('allows pending/failed below the cap only', () => {
+    expect(canAttemptEmail({ email_status: 'pending', email_attempts: 0 })).toBe(true);
+    expect(canAttemptEmail({ email_status: 'failed', email_attempts: 2 })).toBe(true);
+    expect(canAttemptEmail({ email_status: 'failed', email_attempts: 3 })).toBe(false);
+    expect(canAttemptEmail({ email_status: 'done', email_attempts: 0 })).toBe(false);
+    expect(canAttemptEmail({ email_status: 'skipped', email_attempts: 0 })).toBe(false);
+  });
 });

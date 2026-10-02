@@ -1,4 +1,4 @@
-import { EMAIL_MAX_AGE_HOURS, isReservedEmailDomain } from '@/lib/config/app';
+import { EMAIL_MAX_AGE_HOURS, MAX_EMAIL_ATTEMPTS, isReservedEmailDomain } from '@/lib/config/app';
 import type { LeadRow } from '@/lib/leads/types';
 
 export type SendDecision =
@@ -16,6 +16,10 @@ export function shouldSendConfirmation(
   if (ctx.mx === 'unknown') return { send: false, reason: 'mx_unknown', retryable: true };
   if (ctx.sentToSameAddressLast24h) return { send: false, reason: 'throttled', retryable: false };
   return { send: true };
+}
+
+export function canAttemptEmail(lead: Pick<LeadRow, 'email_status' | 'email_attempts'>): boolean {
+  return (lead.email_status === 'pending' || lead.email_status === 'failed') && lead.email_attempts < MAX_EMAIL_ATTEMPTS;
 }
 
 export function escapeHtml(s: string): string {
