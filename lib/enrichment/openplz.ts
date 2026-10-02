@@ -1,3 +1,4 @@
+import { EnrichmentHttpError } from './errors';
 import type { OpenPlzLocality } from './types';
 
 export const STATE_CODES: Record<string, string> = {
@@ -26,6 +27,6 @@ export async function lookupPostalCode(plz: string): Promise<OpenPlzLocality[]> 
     headers: { accept: 'application/json' },
     signal: AbortSignal.timeout(4000),
   });
-  if (!res.ok) throw new Error(`openplz ${res.status}`);
+  if (!res.ok) throw new EnrichmentHttpError('openplz', res.status);
   return (await res.json()) as OpenPlzLocality[];
 }

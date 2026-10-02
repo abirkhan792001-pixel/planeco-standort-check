@@ -51,3 +51,15 @@ export const WRONG_STREET_HIT: NominatimHit[] = [{
   lat: '53.5550', lon: '9.9380', addresstype: 'building',
   address: { house_number: '88', road: 'Thadenstraße', city: 'Hamburg', 'ISO3166-2-lvl4': 'DE-HH', postcode: '22767' },
 }];
+
+/** A-1 "Flurstück 123/4, Gemarkung Wedel": synthetic (not recorded) - Nominatim resolves only the town, in one municipality. */
+export const HITS_WEDEL: NominatimHit[] = [{
+  lat: '53.5822', lon: '9.7046', addresstype: 'town', display_name: 'Wedel, Kreis Pinneberg, Schleswig-Holstein, Deutschland',
+  address: { town: 'Wedel', county: 'Kreis Pinneberg', 'ISO3166-2-lvl4': 'DE-SH', postcode: '22880' },
+}];
+
+/** M4: synthetic - two Osterstraße hits in Hamburg, the first at 20255 (Eimsbüttel), the second at 22765 (Altona). */
+export const HITS_OSTERSTRASSE_TWO_PLZ: NominatimHit[] = [
+  { lat: '53.5767322', lon: '9.9487538', addresstype: 'road', address: { road: 'Osterstraße', suburb: 'Eimsbüttel', city: 'Hamburg', 'ISO3166-2-lvl4': 'DE-HH', postcode: '20255' } },
+  { lat: '53.5530000', lon: '9.9290000', addresstype: 'road', address: { road: 'Osterstraße', suburb: 'Altona-Nord', city: 'Hamburg', 'ISO3166-2-lvl4': 'DE-HH', postcode: '22765' } },
+];

@@ -5,6 +5,7 @@ import { canAttemptEmail, renderConfirmation, shouldSendConfirmation } from '@/l
 import { hasMx } from '@/lib/email/mx';
 import { sendTransactional } from '@/lib/email/brevo';
 import { isPermanentBrevoError, sanitizeDisplayName, type BrevoError } from '@/lib/email/errors';
+import { enrichmentErrorCode } from '@/lib/enrichment/errors';
 import { evaluateGeocode } from '@/lib/enrichment/evaluate';
 import { searchFreeText, searchPostalCodeCentroid, searchStructured } from '@/lib/enrichment/nominatim';
 import { lookupPostalCode } from '@/lib/enrichment/openplz';
@@ -110,12 +111,17 @@ export async function processEnrichment(db: SupabaseClient, id: string, _now: Da
   const attempts = lead.enrichment_attempts + 1;
   try {
     const plz = !lead.address_unknown && lead.postal_code ? await lookupPostalCode(lead.postal_code) : null;
+    // An unknown PLZ (A-5) is left out of the structured query: street + number + city only.
+    const plzKnown = plz !== null && plz.length > 0;
     // A blank description would make Nominatim return "Deutschland" itself and fake a locality hit.
     const hits = lead.address_unknown
       ? (lead.plot_note?.trim() ? await searchFreeText(lead.plot_note) : [])
-      : await searchStructured({ street: lead.street ?? '', houseNumber: lead.house_number, postalCode: lead.postal_code ?? '', city: lead.city ?? '' });
+      : await searchStructured({ street: lead.street ?? '', houseNumber: lead.house_number, postalCode: lead.postal_code ?? '', city: lead.city ?? '' }, plzKnown);
     let result = evaluateGeocode(
-      { addressUnknown: lead.address_unknown, street: lead.street, houseNumber: lead.house_number, postalCode: lead.postal_code, city: lead.city },
+      {
+        addressUnknown: lead.address_unknown, street: lead.street, houseNumber: lead.house_number,
+        postalCode: lead.postal_code, city: lead.city, plotNote: lead.plot_note,
+      },
       plz, hits,
     );
     let centroid: { lat: number; lon: number } | null = null;
@@ -133,12 +139,15 @@ export async function processEnrichment(db: SupabaseClient, id: string, _now: Da
     if (error) throw error;
     await logEvent(db, id, 'enriched', { precision: result.precision, flags: result.flags });
   } catch (err) {
-    const info = errInfo(err);
-    const message = info.message.slice(0, 500);
-    console.error('enrichment failed', id, { code: info.code, message, attempts });
-    const { error } = await db.from('leads')
-      .update({ enrichment_status: 'failed', enrichment_attempts: attempts, enrichment_last_error: message }).eq('id', id);
+    const message = enrichmentErrorCode(err); // 'rate_limited' | 'timeout' | 'config_missing_contact' | truncated message
+    console.error('enrichment failed', id, { code: errInfo(err).code, message, attempts });
+    // Never overwrite a 'done' row (e.g. a concurrent run that succeeded while this one failed).
+    const { data: marked, error } = await db.from('leads')
+      .update({ enrichment_status: 'failed', enrichment_attempts: attempts, enrichment_last_error: message })
+      .eq('id', id).neq('enrichment_status', 'done')
+      .select('id');
     if (error) logDbError('enrichment status update failed', id, error);
+    else if (!marked || marked.length === 0) return; // already done: keep its state and event log untouched
     await logEvent(db, id, 'enrichment_failed', { error: message, attempts });
   }
 }

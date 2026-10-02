@@ -1,26 +1,34 @@
 import 'server-only';
+import { EnrichmentHttpError } from './errors';
+import { buildStructuredQuery, buildUserAgent, type StructuredAddress } from './query';
 import type { NominatimHit } from './types';
 
+const MIN_GAP_MS = 1100;
 let lastRequestAt = 0;
 
-async function politeGet(params: Record<string, string>): Promise<NominatimHit[]> {
-  const wait = lastRequestAt + 1100 - Date.now();
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  lastRequestAt = Date.now();
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-  const base = process.env.APP_BASE_URL ?? 'https://planeco-standort-check.vercel.app';
-  const contact = process.env.NOMINATIM_CONTACT ?? '';
+async function politeGet(params: Record<string, string>): Promise<NominatimHit[]> {
+  // Fail on a missing contact before reserving a slot or touching the network.
+  const userAgent = buildUserAgent(process.env.APP_BASE_URL ?? 'https://planeco-standort-check.vercel.app', process.env.NOMINATIM_CONTACT);
+
+  // Reserve the slot synchronously (before any await): concurrent callers each get their own, ≥ 1.1 s apart.
+  const slot = Math.max(Date.now(), lastRequestAt + MIN_GAP_MS);
+  lastRequestAt = slot;
+  await sleep(slot - Date.now());
+
   const url = `https://nominatim.openstreetmap.org/search?${new URLSearchParams({ ...params, format: 'jsonv2', addressdetails: '1' })}`;
   const res = await fetch(url, {
-    headers: { 'User-Agent': `standort-check-case/1.0 (+${base}; ${contact})`, 'Accept-Language': 'de' },
+    headers: { 'User-Agent': userAgent, 'Accept-Language': 'de' },
     signal: AbortSignal.timeout(6000),
   });
-  if (!res.ok) throw new Error(`nominatim ${res.status}`);
+  if (!res.ok) throw new EnrichmentHttpError('nominatim', res.status);
   return (await res.json()) as NominatimHit[];
 }
 
-export function searchStructured(a: { street: string; houseNumber: string | null; postalCode: string; city: string }) {
-  return politeGet({ street: `${a.houseNumber ?? ''} ${a.street}`.trim(), postalcode: a.postalCode, city: a.city, country: 'de', limit: '5' });
+/** `plzKnown`: OpenPLZ recognised the PLZ. If not (A-5), the postalcode parameter is omitted. */
+export function searchStructured(a: StructuredAddress, plzKnown: boolean) {
+  return politeGet(buildStructuredQuery(a, plzKnown));
 }
 
 export function searchFreeText(q: string) {

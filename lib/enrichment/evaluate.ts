@@ -5,8 +5,12 @@ import type { NominatimHit, OpenPlzLocality } from './types';
 export type Precision = 'house' | 'street' | 'postcode' | 'locality' | 'none';
 export type GeoFlag =
   | 'plz_not_found' | 'city_plz_mismatch' | 'plz_multiple_municipalities' | 'street_not_found'
-  | 'house_not_found' | 'plz_mismatch' | 'ambiguous' | 'address_unknown';
-export type GeoInput = { addressUnknown: boolean; street: string | null; houseNumber: string | null; postalCode: string | null; city: string | null };
+  | 'house_not_found' | 'plz_mismatch' | 'ambiguous' | 'address_unknown' | 'cadastral_only';
+export type GeoInput = {
+  addressUnknown: boolean; street: string | null; houseNumber: string | null; postalCode: string | null; city: string | null;
+  /** Free-text plot description; only read for unknown addresses (cadastral_only detection). */
+  plotNote?: string | null;
+};
 export type Candidate = { label: string; municipality: string | null; stateCode: string | null; postcode: string | null; lat: number; lon: number };
 export type EnrichmentResult = {
   precision: Precision; lat: number | null; lon: number | null;
@@ -25,6 +29,26 @@ function levenshtein(a: string, b: string): number {
       dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
   return dp[a.length][b.length];
 }
+
+/** Parcel numbers cannot be geocoded; spec §15.1 flags such descriptions as cadastral_only. */
+const CADASTRAL = /flurst(ü|ue)ck|gemarkung|flur\s*\d/i;
+
+// Typographic dashes (U+2010 hyphen … U+2015 horizontal bar, U+2212 minus) are folded to "-" so "14–16" equals "14-16".
+const DASHES = /[‐-―−]/g;
+const houseKey = (s: string) => normalizeHouseNumber(s).replace(DASHES, '-');
+
+/**
+ * Keys a hit's house number can be matched by: the whole value ("14-16", "14/1") plus its parts when it lists several
+ * numbers ("14;16", "14,16", "14/16"). An input "14" therefore does not match a range "14-16" (conservative).
+ */
+function houseKeys(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return [houseKey(raw), ...raw.split(/[,;/]/).map(houseKey)].filter(Boolean);
+}
+
+/** True if the hit's postcode (possibly "20095;20097") has a part equal to `plz`. */
+const postcodeMatches = (hit: NominatimHit, plz: string | null) =>
+  !!plz && (hit.address.postcode ?? '').split(/[,;]/).some((part) => part.trim() === plz);
 
 function streetMatches(input: string, found: string): boolean {
   if (!input || !found) return false;
@@ -76,6 +100,7 @@ export function evaluateGeocode(input: GeoInput, plz: OpenPlzLocality[] | null, 
 
   if (input.addressUnknown) {
     flags.add('address_unknown');
+    if (input.plotNote && CADASTRAL.test(input.plotNote.normalize('NFC'))) flags.add('cadastral_only');
     const groups = groupByMunicipality(hits);
     if (groups.size === 0) return done();
     if (groups.size > 1) {
@@ -107,14 +132,15 @@ export function evaluateGeocode(input: GeoInput, plz: OpenPlzLocality[] | null, 
     return done();
   }
 
-  const hn = input.houseNumber ? normalizeHouseNumber(input.houseNumber) : null;
-  const withHouse = hn
-    ? verified.find((h) => (h.address.house_number ?? '').split(/[,;/]/).map(normalizeHouseNumber).includes(hn))
-    : undefined;
-  const best = withHouse ?? verified[0];
+  // Best hit: prefer one at the typed PLZ, then one with the typed house number, else the first verified hit.
+  const atPlz = verified.filter((h) => postcodeMatches(h, input.postalCode));
+  const pool = atPlz.length > 0 ? atPlz : verified;
+  const hn = input.houseNumber ? houseKey(input.houseNumber) : null;
+  const withHouse = hn ? pool.find((h) => houseKeys(h.address.house_number).includes(hn)) : undefined;
+  const best = withHouse ?? pool[0];
   if (hn && !withHouse) flags.add('house_not_found');
   const found = best.address.postcode ?? null;
-  if (found && input.postalCode && found !== input.postalCode) flags.add('plz_mismatch');
+  if (found && input.postalCode && !postcodeMatches(best, input.postalCode)) flags.add('plz_mismatch');
 
   Object.assign(result, {
     precision: withHouse ? 'house' : 'street',
