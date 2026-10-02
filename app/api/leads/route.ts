@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+import { after, NextResponse } from 'next/server';
 import { MAX_BODY_BYTES, parseJsonBody } from '@/lib/leads/body';
 import { createLead } from '@/lib/leads/create';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendFallbackMail } from '@/lib/email/fallback';
+import { runSideEffects } from '@/lib/leads/side-effects';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -28,6 +29,7 @@ export async function POST(req: Request) {
 
   switch (result.kind) {
     case 'created':
+      if (result.runSideEffects) after(() => runSideEffects(result.id));
       return NextResponse.json({ id: result.id }, { status: 201 });
     case 'replay':
       return NextResponse.json({ id: result.id }, { status: 200 });
