@@ -1,10 +1,13 @@
 import 'server-only';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { EMAIL_CLAIM_STALE_MINUTES, emailDomain, isReservedEmailDomain } from '@/lib/config/app';
+import { EMAIL_CLAIM_STALE_MINUTES, MAX_ENRICHMENT_ATTEMPTS, emailDomain, isReservedEmailDomain } from '@/lib/config/app';
 import { canAttemptEmail, renderConfirmation, shouldSendConfirmation } from '@/lib/email/confirmation';
 import { hasMx } from '@/lib/email/mx';
 import { sendTransactional } from '@/lib/email/brevo';
 import { isPermanentBrevoError, sanitizeDisplayName, type BrevoError } from '@/lib/email/errors';
+import { evaluateGeocode } from '@/lib/enrichment/evaluate';
+import { searchFreeText, searchPostalCodeCentroid, searchStructured } from '@/lib/enrichment/nominatim';
+import { lookupPostalCode } from '@/lib/enrichment/openplz';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logEvent } from './events';
 import type { LeadRow } from './types';
@@ -93,14 +96,67 @@ export async function processConfirmation(db: SupabaseClient, id: string, now: D
   await logEvent(db, id, 'email_sent', { messageId });
 }
 
+/**
+ * Geocodes and verifies the address (OpenPLZ + Nominatim, road-verified). Idempotent: the same input yields the same
+ * facts, so no claim is needed; a concurrent duplicate run just writes the same result. Gives up once
+ * MAX_ENRICHMENT_ATTEMPTS is reached. Log lines carry codes/messages only, never address data.
+ * `_now` keeps the signature parallel to processConfirmation (one clock per run); enriched_at uses the real finish time.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function processEnrichment(db: SupabaseClient, id: string, _now: Date): Promise<void> {
+  const lead = await loadLead(db, id);
+  if (lead.enrichment_status === 'done' || lead.enrichment_status === 'skipped') return;
+  if (lead.enrichment_attempts >= MAX_ENRICHMENT_ATTEMPTS) return;
+  const attempts = lead.enrichment_attempts + 1;
+  try {
+    const plz = !lead.address_unknown && lead.postal_code ? await lookupPostalCode(lead.postal_code) : null;
+    // A blank description would make Nominatim return "Deutschland" itself and fake a locality hit.
+    const hits = lead.address_unknown
+      ? (lead.plot_note?.trim() ? await searchFreeText(lead.plot_note) : [])
+      : await searchStructured({ street: lead.street ?? '', houseNumber: lead.house_number, postalCode: lead.postal_code ?? '', city: lead.city ?? '' });
+    let result = evaluateGeocode(
+      { addressUnknown: lead.address_unknown, street: lead.street, houseNumber: lead.house_number, postalCode: lead.postal_code, city: lead.city },
+      plz, hits,
+    );
+    let centroid: { lat: number; lon: number } | null = null;
+    if (result.precision === 'postcode' && result.lat === null && lead.postal_code) {
+      centroid = await searchPostalCodeCentroid(lead.postal_code);
+      if (centroid) result = { ...result, lat: centroid.lat, lon: centroid.lon };
+    }
+    const { error } = await db.from('leads').update({
+      enrichment_status: 'done', enrichment_attempts: attempts, enrichment_last_error: null, enriched_at: new Date().toISOString(),
+      geo_precision: result.precision, geo_lat: result.lat, geo_lon: result.lon,
+      geo_municipality: result.municipality, geo_municipality_key: result.municipalityKey, geo_district: result.district,
+      geo_state_code: result.stateCode, geo_found_postcode: result.foundPostcode, geo_flags: result.flags,
+      geo_candidates: result.candidates, geo_raw: { openplz: plz, nominatim: hits, centroid },
+    }).eq('id', id);
+    if (error) throw error;
+    await logEvent(db, id, 'enriched', { precision: result.precision, flags: result.flags });
+  } catch (err) {
+    const info = errInfo(err);
+    const message = info.message.slice(0, 500);
+    console.error('enrichment failed', id, { code: info.code, message, attempts });
+    const { error } = await db.from('leads')
+      .update({ enrichment_status: 'failed', enrichment_attempts: attempts, enrichment_last_error: message }).eq('id', id);
+    if (error) logDbError('enrichment status update failed', id, error);
+    await logEvent(db, id, 'enrichment_failed', { error: message, attempts });
+  }
+}
+
 /** Runs after the HTTP response. Each step is independent: a failing email must not block enrichment. */
 export async function runSideEffects(id: string): Promise<void> {
   try {
     const db = createAdminClient();
+    const now = new Date();
     try {
-      await processConfirmation(db, id, new Date());
+      await processConfirmation(db, id, now);
     } catch (err) {
       console.error('confirmation step crashed', id, errInfo(err));
+    }
+    try {
+      await processEnrichment(db, id, now);
+    } catch (err) {
+      console.error('enrichment step crashed', id, errInfo(err));
     }
   } catch (err) {
     console.error('side effects setup failed', id, errInfo(err));
