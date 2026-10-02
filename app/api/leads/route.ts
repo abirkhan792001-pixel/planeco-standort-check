@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { MAX_BODY_BYTES, parseJsonBody } from '@/lib/leads/body';
 import { createLead } from '@/lib/leads/create';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendFallbackMail } from '@/lib/email/fallback';
@@ -7,15 +8,16 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
-  if (Number(req.headers.get('content-length') ?? '0') > 16_000) {
+  const declared = Number(req.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
     return NextResponse.json({ error: 'too_large' }, { status: 413 });
   }
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: 'bad_json' }, { status: 400 });
+  // The header can be absent or wrong (chunked bodies): the real size is checked on the text.
+  const parsedBody = parseJsonBody(await req.text());
+  if (!parsedBody.ok) {
+    return NextResponse.json({ error: parsedBody.status === 413 ? 'too_large' : 'bad_json' }, { status: parsedBody.status });
   }
+  const body = parsedBody.body;
 
   const result = await createLead(body, {
     now: new Date(),

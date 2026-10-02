@@ -27,10 +27,16 @@ export function deviceType(ua: string | null): DeviceType {
   return 'desktop';
 }
 
-export function spamReason(p: LeadPayload, now: Date): 'honeypot' | 'too_fast' | null {
+export function spamReason(p: LeadPayload): 'honeypot' | 'too_fast' | null {
   if (p.website.trim()) return 'honeypot';
-  if (now.getTime() - p.formRenderedAt < MIN_FILL_MS) return 'too_fast';
+  if (p.fillMs < MIN_FILL_MS) return 'too_fast';
   return null;
+}
+
+/** Postgres data/constraint errors (SQLSTATE class 22/23): the row itself is bad, the DB is up. */
+export function isDataError(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return typeof code === 'string' && (code.startsWith('22') || code.startsWith('23'));
 }
 
 export function dedupeKeysFromPayload(p: LeadPayload): DedupeKeys {
@@ -100,7 +106,7 @@ export async function createLead(body: unknown, ctx: CreateLeadContext): Promise
   const parsed = leadPayloadSchema.safeParse(body);
   if (!parsed.success) return { kind: 'invalid', errors: fieldErrors(parsed.error) };
   const p = parsed.data;
-  const spam = spamReason(p, ctx.now);
+  const spam = spamReason(p);
 
   try {
     const db = ctx.getDb();
@@ -122,9 +128,15 @@ export async function createLead(body: unknown, ctx: CreateLeadContext): Promise
     }
     return { kind: 'created', id: inserted.data.id as string, runSideEffects: !spam };
   } catch (err) {
-    console.error('createLead: database failure', err);
+    // Log code + message only: Postgres `details` can contain the failing row (PII).
+    const e = err as { code?: unknown; message?: unknown } | null;
+    console.error('createLead: database failure', { code: e?.code, message: e?.message });
+    if (isDataError(err)) {
+      return { kind: 'invalid', errors: { form: 'Ihre Angaben konnten nicht gespeichert werden. Bitte prüfen Sie Ihre Eingaben.' } };
+    }
     if (spam) return { kind: 'fallback' };
-    const delivered = await ctx.sendFallback(p).catch(() => false);
+    // sendFallbackMail catches all errors internally and resolves to boolean.
+    const delivered = await ctx.sendFallback(p);
     return delivered ? { kind: 'fallback' } : { kind: 'unavailable' };
   }
 }

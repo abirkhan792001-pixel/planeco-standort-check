@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildLeadInsert, deviceType, spamReason, dedupeKeysFromPayload } from '@/lib/leads/create';
+import { buildLeadInsert, deviceType, spamReason, dedupeKeysFromPayload, isDataError } from '@/lib/leads/create';
+import { parseJsonBody } from '@/lib/leads/body';
 import { leadPayloadSchema } from '@/lib/leads/schema';
 import { NO_DUPLICATE } from '@/lib/leads/dedupe';
 import { validPayload } from '../fixtures/payload';
@@ -8,9 +9,24 @@ const p = leadPayloadSchema.parse(validPayload);
 const now = new Date('2026-10-01T08:00:10Z');
 
 describe('spamReason', () => {
-  it('honeypot', () => expect(spamReason({ ...p, website: 'http://spam' }, now)).toBe('honeypot'));
-  it('too fast (< 3 s)', () => expect(spamReason({ ...p, formRenderedAt: now.getTime() - 1000 }, now)).toBe('too_fast'));
-  it('human', () => expect(spamReason(p, now)).toBeNull());
+  it('honeypot', () => expect(spamReason({ ...p, website: 'http://spam' })).toBe('honeypot'));
+  it('too fast (< 3 s)', () => expect(spamReason({ ...p, fillMs: 1000 })).toBe('too_fast'));
+  it('human', () => expect(spamReason({ ...p, fillMs: 10_000 })).toBeNull());
+});
+
+describe('isDataError', () => {
+  it.each([[{ code: '23514' }, true], [{ code: '22021' }, true], [{ code: 'PGRST301' }, false], [new Error('fetch failed'), false], [{ code: '08006' }, false], [null, false], ['23514', false]])(
+    '%j -> %s', (e, r) => expect(isDataError(e)).toBe(r));
+});
+
+describe('parseJsonBody', () => {
+  it('parses valid JSON', () => expect(parseJsonBody('{"a":1}')).toEqual({ ok: true, body: { a: 1 } }));
+  it('400 on bad JSON', () => expect(parseJsonBody('{nope')).toEqual({ ok: false, status: 400 }));
+  it('413 when over 16000 bytes (UTF-8, not chars)', () => {
+    expect(parseJsonBody(JSON.stringify({ a: 'x'.repeat(16_000) }))).toEqual({ ok: false, status: 413 });
+    expect(parseJsonBody(JSON.stringify({ a: 'ä'.repeat(8_000) }))).toEqual({ ok: false, status: 413 });
+    expect(parseJsonBody(JSON.stringify({ a: 'x'.repeat(100) })).ok).toBe(true);
+  });
 });
 
 describe('deviceType', () => {

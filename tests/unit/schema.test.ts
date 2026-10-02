@@ -25,4 +25,35 @@ describe('leadPayloadSchema', () => {
   it('rejects an invalid email', () => expect(leadPayloadSchema.safeParse({ ...validPayload, email: 'nope' }).success).toBe(false));
 
   it('rejects overlong names', () => expect(leadPayloadSchema.safeParse({ ...validPayload, firstName: 'x'.repeat(101) }).success).toBe(false));
+
+  it('counts plotNote length in code points like Postgres char_length', () => {
+    const base = { ...validPayload, addressUnknown: true, street: '', postalCode: '', city: '' };
+    const bad = leadPayloadSchema.safeParse({ ...base, plotNote: '\u{1F600}a' });
+    expect(bad.success).toBe(false);
+    if (!bad.success) expect(Object.keys(fieldErrors(bad.error))).toContain('plotNote');
+    expect(leadPayloadSchema.safeParse({ ...base, plotNote: '\u{1F600}ab' }).success).toBe(true);
+  });
+
+  it('rejects NUL characters in free-text fields', () => {
+    const r = leadPayloadSchema.safeParse({ ...validPayload, firstName: 'Tho\u0000mas' });
+    expect(r.success).toBe(false);
+    if (!r.success) expect(fieldErrors(r.error).firstName).toBe('Ungültige Zeichen');
+    for (const k of ['lastName', 'email', 'phone', 'street', 'houseNumber', 'city']) {
+      const v = k === 'email' ? 'a\u0000@example.com' : k === 'phone' ? '+49 40 123 456\u0000' : 'a\u0000b';
+      expect(leadPayloadSchema.safeParse({ ...validPayload, [k]: v }).success).toBe(false);
+    }
+  });
+
+  it('strips NULs from website and attribution values', () => {
+    const r = leadPayloadSchema.parse({ ...validPayload, website: 'a\u0000b', attribution: { utm_source: 'fa\u0000ce' } });
+    expect(r.website).toBe('ab');
+    expect((r.attribution as Record<string, unknown>).utm_source).toBe('face');
+  });
+
+  it('requires fillMs and bounds it', () => {
+    const rest: Record<string, unknown> = { ...validPayload };
+    delete rest.fillMs;
+    expect(leadPayloadSchema.safeParse(rest).success).toBe(false);
+    expect(leadPayloadSchema.safeParse({ ...validPayload, fillMs: -1 }).success).toBe(false);
+  });
 });
