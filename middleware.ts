@@ -16,10 +16,14 @@ export async function middleware(request: NextRequest) {
     },
   });
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user && request.nextUrl.pathname.startsWith('/dashboard')) {
+  // C-4: a server-action POST must not get an HTML redirect (the client cannot parse it and the action crashes). The
+  // action checks the session itself and answers with an action redirect to /login. Pages still guard with requireUser().
+  const isServerAction = request.method === 'POST' && request.headers.has('next-action');
+  if (!user && !isServerAction && request.nextUrl.pathname.startsWith('/dashboard')) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
-    return NextResponse.redirect(url);
+    // 307 for GET/HEAD; a form POST (e.g. the export) gets 303 so the browser follows with GET instead of re-posting.
+    return NextResponse.redirect(url, request.method === 'GET' || request.method === 'HEAD' ? 307 : 303);
   }
   return response;
 }

@@ -24,6 +24,7 @@ export function AddressBadge({ lead }: { lead: LeadView }) {
   const labels: Record<AddressQuality, [string, string]> = {
     house: [tone.green, 'Hausgenau'], street: [tone.blue, 'Straßengenau'], postcode: [tone.amber, 'Nur PLZ-genau'],
     locality: [tone.amber, 'Nur Ort'], none: [tone.red, 'Nicht gefunden'], ambiguous: [tone.amber, 'Mehrdeutig'], pending: [tone.grey, '…'],
+    'n/a': [tone.grey, '—'],
   };
   const [cls, label] = labels[lead.addressQuality];
   const flags = geoFlagTexts(lead);

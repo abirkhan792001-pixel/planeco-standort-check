@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveLeadViews } from '@/lib/leads/derive';
+import { deriveLeadViews, missingRootIds } from '@/lib/leads/derive';
 import { makeLeadRow } from '../fixtures/lead-row';
 
 const OWN = 'planeco-standort-check.vercel.app';
@@ -23,8 +23,26 @@ describe('deriveLeadViews', () => {
     ], [], OWN);
     expect(views.map((v) => v.addressQuality)).toEqual(['ambiguous', 'pending']);
   });
+  it('spam (enrichment skipped) has no address verdict', () => {
+    const [v] = deriveLeadViews([makeLeadRow({ enrichment_status: 'skipped', spam_suspected: true })], [], OWN);
+    expect(v.addressQuality).toBe('n/a');
+  });
   it('unknown address label', () => {
     const [v] = deriveLeadViews([makeLeadRow({ address_unknown: true, street: null, plot_note: 'Lindenweg 3, Neustadt' })], [], OWN);
     expect(v.plotLabel).toBe('Adresse unbekannt: Lindenweg 3, Neustadt');
   });
+});
+
+describe('missingRootIds (1000-row window)', () => {
+  it('returns each duplicate_of id that is not in the window, once', () => {
+    const rows = [
+      makeLeadRow({ id: 'a' }),
+      makeLeadRow({ id: 'b', duplicate_of: 'a' }),
+      makeLeadRow({ id: 'c', duplicate_of: 'old' }),
+      makeLeadRow({ id: 'd', duplicate_of: 'old' }),
+      makeLeadRow({ id: 'e', duplicate_of: 'older' }),
+    ];
+    expect(missingRootIds(rows)).toEqual(['old', 'older']);
+  });
+  it('is empty when every root is present', () => expect(missingRootIds([makeLeadRow({ id: 'a' })])).toEqual([]));
 });

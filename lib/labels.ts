@@ -20,9 +20,6 @@ export const STATE_LABELS: Record<string, string> = {
   'DE-BE': 'Berlin', 'DE-BB': 'Brandenburg', 'DE-MV': 'Mecklenburg-Vorpommern', 'DE-SN': 'Sachsen', 'DE-ST': 'Sachsen-Anhalt', 'DE-TH': 'Thüringen',
 };
 
-/** Returned by dashboard server actions when the session is gone (spec C-4); the table then redirects to /login. */
-export const SESSION_EXPIRED_MESSAGE = 'Sitzung abgelaufen – bitte neu anmelden.';
-
 export type LabelTone = 'green' | 'amber' | 'red' | 'grey' | 'blue';
 export type MailStatusLabel = { text: string; tone: LabelTone; title?: string };
 

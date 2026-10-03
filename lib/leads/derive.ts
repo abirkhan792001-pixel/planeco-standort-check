@@ -4,7 +4,8 @@ import { SERVICE_AREA } from '@/lib/config/service-area';
 import { assessServiceArea, type AreaAssessment } from '@/lib/geo/service-area';
 import type { LeadRow } from './types';
 
-export type AddressQuality = 'house' | 'street' | 'postcode' | 'locality' | 'none' | 'ambiguous' | 'pending';
+/** `n/a` = enrichment skipped (spam): there is no address verdict at all, the badge shows "—". */
+export type AddressQuality = 'house' | 'street' | 'postcode' | 'locality' | 'none' | 'ambiguous' | 'pending' | 'n/a';
 export type LeadView = LeadRow & {
   channel: ChannelInfo; area: AreaAssessment; addressQuality: AddressQuality;
   ownerName: string | null; groupSize: number; plotLabel: string;
@@ -19,7 +20,8 @@ export function ownHost(): string {
 }
 
 function addressQuality(r: LeadRow): AddressQuality {
-  // Only a finished enrichment has a precision; pending/failed/skipped (spam) must not read as "Nicht gefunden".
+  // Only a finished enrichment has a precision; pending/failed must not read as "Nicht gefunden".
+  if (r.enrichment_status === 'skipped') return 'n/a';
   if (r.enrichment_status !== 'done') return 'pending';
   if (r.geo_flags.includes('ambiguous')) return 'ambiguous';
   return r.geo_precision ?? 'none';
@@ -28,6 +30,18 @@ function addressQuality(r: LeadRow): AddressQuality {
 function plotLabel(r: LeadRow): string {
   if (r.address_unknown) return `Adresse unbekannt: ${r.plot_note ?? ''}`.trim();
   return `${r.street ?? ''}${r.house_number ? ` ${r.house_number}` : ''}, ${r.postal_code ?? ''} ${r.city ?? ''}`.trim();
+}
+
+/**
+ * Root ids referenced by `duplicate_of` that are not in `rows`. The list fetches only the newest N leads; without the
+ * missing roots a duplicate inside the window would point at an absent root and the group would vanish from the
+ * roots-only view.
+ */
+export function missingRootIds(rows: Pick<LeadRow, 'id' | 'duplicate_of'>[]): string[] {
+  const present = new Set(rows.map((r) => r.id));
+  const missing = new Set<string>();
+  for (const r of rows) if (r.duplicate_of && !present.has(r.duplicate_of)) missing.add(r.duplicate_of);
+  return [...missing];
 }
 
 /** Pure: all "opinions" (channel, area verdict, badges) are computed here from stored facts. */
