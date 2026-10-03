@@ -2,7 +2,7 @@ import type { ChannelGroup } from '@/lib/attribution/types';
 import type { LeadView } from '@/lib/leads/derive';
 import type { DisqualifyReason } from '@/lib/leads/types';
 
-/** Below this many leads a rate says too little; the report page greys it out. */
+/** A rate over fewer than this many leads (its own denominator) says too little; the report page greys it out. */
 export const MIN_SAMPLE = 20;
 
 export type ReportRow = {
@@ -18,12 +18,21 @@ export type ReportRow = {
   avgHoursToClaim: number | null;
 };
 
+/**
+ * Pure: which of a row's rates rest on too few cases (spec: rates with n < 20 are greyed out). Each rate is judged by its
+ * own denominator: the in-area rate by `located`, the qualification rate by `decided`, not by the lead count.
+ */
+export function rateConfidence(row: Pick<ReportRow, 'located' | 'decided'>): { areaThin: boolean; qualThin: boolean } {
+  return { areaThin: row.located < MIN_SAMPLE, qualThin: row.decided < MIN_SAMPLE };
+}
+
 const QUALIFIED = new Set(['qualifiziert', 'gewonnen', 'verloren']);
 const LOCATED = new Set(['inside', 'edge', 'outside']);
 
 /**
  * Pure: one row per channel group + channel + campaign over the root leads of `views` (duplicates and spam never
- * count; test leads only with `includeTest`). Sorted by lead count, largest first.
+ * count; test leads only with `includeTest`). Sorted by group, then channel, then campaign (German collation), so the
+ * rows of one group stay together.
  */
 export function buildChannelReport(views: LeadView[], opts: { includeTest: boolean }): ReportRow[] {
   const groups = new Map<string, LeadView[]>();
@@ -62,5 +71,7 @@ export function buildChannelReport(views: LeadView[], opts: { includeTest: boole
       topReason: [...reasons.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null,
       avgHoursToClaim: claimed ? claimHours / claimed : null,
     };
-  }).sort((a, b) => b.leads - a.leads);
+  }).sort((a, b) => (
+    a.group.localeCompare(b.group, 'de') || a.channel.localeCompare(b.channel, 'de') || a.campaign.localeCompare(b.campaign, 'de')
+  ));
 }

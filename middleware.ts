@@ -22,6 +22,8 @@ export async function middleware(request: NextRequest) {
   if (!user && !isServerAction && request.nextUrl.pathname.startsWith('/dashboard')) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
+    // No query string on the login redirect: a report filter like ?test=1 means nothing there.
+    url.search = '';
     // 307 for GET/HEAD; a form POST (e.g. the export) gets 303 so the browser follows with GET instead of re-posting.
     return NextResponse.redirect(url, request.method === 'GET' || request.method === 'HEAD' ? 307 : 303);
   }

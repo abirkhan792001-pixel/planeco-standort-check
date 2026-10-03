@@ -3,7 +3,7 @@ import { requireUser } from '@/lib/auth';
 import { loadLeadWindow } from '@/lib/dashboard/load';
 import { deriveLeadViews, ownHost } from '@/lib/leads/derive';
 import { AREA_TEXT, REASON_LABELS, STATUS_LABELS } from '@/lib/labels';
-import { buildChannelReport, MIN_SAMPLE, type ReportRow } from '@/lib/report';
+import { buildChannelReport, MIN_SAMPLE, rateConfidence, type ReportRow } from '@/lib/report';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +17,17 @@ const HEADERS = [
 
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)} %` : '—');
 const totalLeads = (rows: ReportRow[]) => rows.reduce((sum, r) => sum + r.leads, 0);
+const hours = (h: number) => h.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+/** A rate cell. Under MIN_SAMPLE cases it is grey and says so in visible text (colour alone is not enough). */
+function RateCell({ value, n, thin }: { value: string; n: number; thin: boolean }) {
+  if (!thin) return <td className="px-2 py-2">{value}</td>;
+  return (
+    <td className="px-2 py-2 text-stone-500" title={`Nur ${n} Fälle (weniger als ${MIN_SAMPLE}) – zu wenig Daten für eine Aussage`}>
+      {value} <span className="text-xs">(zu wenig Daten)</span>
+    </td>
+  );
+}
 
 export default async function ReportPage({ searchParams }: { searchParams: Promise<{ test?: string | string[] }> }) {
   const { supabase } = await requireUser();
@@ -36,7 +47,7 @@ export default async function ReportPage({ searchParams }: { searchParams: Promi
         </Link>
       </div>
       <p className="text-xs text-stone-500">
-        Nur Erstanfragen (ohne Duplikate und Spam). Quoten mit weniger als {MIN_SAMPLE} Anfragen sind grau – zu wenig Daten für eine Aussage.
+        Nur Erstanfragen (ohne Duplikate und Spam). Quoten, die auf weniger als {MIN_SAMPLE} Fällen beruhen, sind grau – zu wenig Daten für eine Aussage.
       </p>
       {hiddenTest > 0 && (
         <p className="text-xs text-stone-500">
@@ -49,7 +60,7 @@ export default async function ReportPage({ searchParams }: { searchParams: Promi
           Es werden die neuesten {REPORT_WINDOW.toLocaleString('de-DE')} Anfragen ausgewertet.
         </p>
       )}
-      <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
+      <div tabIndex={0} role="region" aria-label="Kanalbericht" className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
         <table className="min-w-full text-sm">
           <caption className="sr-only">Anfragen, Gebietsquote und Qualifizierungsquote je Kanal und Kampagne</caption>
           <thead className="bg-stone-100 text-left">
@@ -57,18 +68,17 @@ export default async function ReportPage({ searchParams }: { searchParams: Promi
           </thead>
           <tbody>
             {rows.map((r) => {
-              const thin = r.leads < MIN_SAMPLE ? 'text-stone-500' : '';
-              const thinTitle = r.leads < MIN_SAMPLE ? `Weniger als ${MIN_SAMPLE} Anfragen – zu wenig Daten für eine Aussage` : undefined;
+              const { areaThin, qualThin } = rateConfidence(r);
               return (
                 <tr key={JSON.stringify([r.group, r.channel, r.campaign])} className="border-t border-stone-100">
                   <td className="px-2 py-2">{r.group}</td><td className="px-2 py-2">{r.channel}</td><td className="px-2 py-2">{r.campaign}</td>
                   <td className="px-2 py-2">{r.leads}</td>
-                  <td className={`px-2 py-2 ${thin}`} title={thinTitle}>{pct(r.inside, r.located)}</td>
+                  <RateCell value={pct(r.inside, r.located)} n={r.located} thin={areaThin} />
                   <td className="px-2 py-2">{r.unclear}</td>
-                  <td className={`px-2 py-2 ${thin}`} title={thinTitle}>{pct(r.qualified, r.decided)}</td>
+                  <RateCell value={pct(r.qualified, r.decided)} n={r.decided} thin={qualThin} />
                   <td className="px-2 py-2">{r.won}</td>
                   <td className="px-2 py-2">{r.topReason ? REASON_LABELS[r.topReason] : '—'}</td>
-                  <td className="px-2 py-2">{r.avgHoursToClaim === null ? '—' : r.avgHoursToClaim.toFixed(1)}</td>
+                  <td className="px-2 py-2">{r.avgHoursToClaim === null ? '—' : hours(r.avgHoursToClaim)}</td>
                 </tr>
               );
             })}
