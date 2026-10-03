@@ -14,7 +14,7 @@ Case study for Planeco Building (Tech & Automation). A free "site check" offer: 
 
 Emails at `example.com/.net/.org`, `test.de` and the `.test`/`.example`/`.invalid` TLDs are stored as test leads but never mailed (protects the sender reputation). Real addresses get one confirmation per 24 h at most.
 
-The five case samples are seeded as test data. Expected dashboard view (#1, #2, #3, #5 verified live during development; full seeded set: see [Tested on](#tested-on)):
+The five case samples are seeded as test data. Dashboard view of the seeded samples (verified on production, see [Tested on](#tested-on)):
 
 | # | Sample | Dashboard |
 |---|---|---|
@@ -89,7 +89,7 @@ See `.env.example`.
 Automated: `npm test` (360 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
 
 Verified against production / the live database:
-- **Case samples:** #1, #2, #3 and #5 verified live during development (#1 house-level but PLZ mismatch, found 01097 → Außerhalb; #2 ambiguous across three states; #3 street-level, PLZ mismatch, DE-HH; #5 postcode-level, ~55 km from Hamburg → Randlage). For #4, the phone match with #1 (`004940123456` = `+49 40 / 123 456`) is unit-tested. Full seeded set on production: pending (seeded after the development test rows are removed).
+- **Case samples (production, seeded via the real API):** all five stored and enriched as listed above — #1 house-level, PLZ mismatch (found 01097), Sachsen; #2 `address_unknown` + `ambiguous`, no coordinates; #3 street-level, PLZ mismatch (found 20255), DE-HH; #4 linked to #1 as duplicate (phone + address); #5 postcode-level, DE-SH, ~55 km from Hamburg. Test addresses were not mailed (`test_domain`). Re-running the seed replays (HTTP 200) and creates no new rows.
 - **Claiming (C-1):** two concurrent `claim_lead` calls on the same lead → exactly one wins (row lock).
 - **Mail claim:** two concurrent mail claims → exactly one sends; a claim stuck in `sending` for more than 10 minutes is retried.
 - **Access (C-7):** RPC calls without a session are denied (401 / `42501`); `/dashboard` redirects to `/login` when logged out; the export is POST-only (GET → 405) and checks the session itself.
