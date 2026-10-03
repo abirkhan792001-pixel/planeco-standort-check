@@ -436,6 +436,10 @@ describe('21.4.6 Attribution (U-1, U-2, U-3, U-5, U-6)', () => {
     expect(channel(U2.search)).toEqual({ group: 'Paid Search', channel: 'Google Ads', campaign: '(ohne Kampagne)' });
   });
 
+  it('U-2: manual Google tagging (utm_source=google, paid medium, no gclid) is Google Ads too', () => {
+    expect(channel(U2.manual)).toEqual({ group: 'Paid Search', channel: 'Google Ads', campaign: 'standortcheck_brand' });
+  });
+
   it('U-3: fbclid without UTMs is Meta but not assumed paid', () => {
     const c = channel(U3.search);
     expect(c.group).toBe('Social (unklar)');

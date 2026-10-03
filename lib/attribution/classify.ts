@@ -2,6 +2,8 @@ import type { ChannelInfo, RawAttribution } from './types';
 
 const PAID = new Set(['cpc', 'ppc', 'paid', 'paidsearch', 'paid_search', 'paidsocial', 'paid_social', 'cpm', 'display', 'retargeting']);
 const META = new Set(['facebook', 'fb', 'instagram', 'ig', 'meta']);
+/** Manually tagged search ads (utm_source + paid medium, no click id) — e.g. auto-tagging off or stripped. */
+const SEARCH_ADS = new Map([['google', 'Google Ads'], ['bing', 'Microsoft Ads']]);
 const SEARCH = ['google.', 'bing.', 'duckduckgo.', 'ecosia.', 'yahoo.', 'startpage.'];
 const SOCIAL = ['facebook.', 'instagram.', 'linkedin.', 't.co', 'x.com', 'tiktok.'];
 
@@ -23,7 +25,10 @@ function matches(host: string, patterns: string[]): boolean {
   return patterns.some((p) => (p.endsWith('.') ? host.startsWith(p) || host.includes(`.${p}`) : host === p || host.endsWith(`.${p}`)));
 }
 
-/** Ordered rules, first match wins (spec §16). Raw values stay in the DB; this runs at read time. */
+/**
+ * Ordered rules, first match wins (spec §16, plus: google/bing + paid medium without click id = Paid Search).
+ * Raw values stay in the DB; this runs at read time.
+ */
 export function classifyChannel(a: RawAttribution, ownHost: string): ChannelInfo {
   const campaign = a.utm_campaign?.trim() || '(ohne Kampagne)';
   const src = clean(a.utm_source);
@@ -32,6 +37,8 @@ export function classifyChannel(a: RawAttribution, ownHost: string): ChannelInfo
 
   if (clean(a.gclid) || clean(a.gbraid) || clean(a.wbraid)) return { group: 'Paid Search', channel: 'Google Ads', campaign };
   if (clean(a.msclkid)) return { group: 'Paid Search', channel: 'Microsoft Ads', campaign };
+  const searchAds = src && med && PAID.has(med) ? SEARCH_ADS.get(src) : undefined;
+  if (searchAds) return { group: 'Paid Search', channel: searchAds, campaign };
   if (src && META.has(src)) {
     return med && PAID.has(med)
       ? { group: 'Paid Social', channel: 'Meta Ads', campaign }

@@ -35,6 +35,19 @@ describe('classifyChannel', () => {
   it('fbclid alone is NOT assumed paid', () => {
     expect(classifyChannel({ fbclid: 'x' }, OWN).group).toBe('Social (unklar)');
   });
+  it('google + paid medium without click id is Google Ads (manual tagging)', () => {
+    expect(classifyChannel({ utm_source: 'google', utm_medium: 'cpc', utm_campaign: 'standortcheck_brand' }, OWN))
+      .toEqual({ group: 'Paid Search', channel: 'Google Ads', campaign: 'standortcheck_brand' });
+  });
+  it('manual search tagging is case-insensitive', () => {
+    expect(classifyChannel({ utm_source: 'Google', utm_medium: 'CPC' }, OWN)).toMatchObject({ group: 'Paid Search', channel: 'Google Ads' });
+  });
+  it('bing + paid medium without click id is Microsoft Ads', () => {
+    expect(classifyChannel({ utm_source: 'bing', utm_medium: 'ppc' }, OWN)).toMatchObject({ group: 'Paid Search', channel: 'Microsoft Ads' });
+  });
+  it('google without a paid medium is not Paid Search', () => {
+    expect(classifyChannel({ utm_source: 'google', utm_medium: 'organic' }, OWN).group).toBe('Campaign');
+  });
   it('other paid mediums', () => {
     expect(classifyChannel({ utm_source: 'linkedin', utm_medium: 'cpc' }, OWN)).toMatchObject({ group: 'Paid Other', channel: 'Paid – linkedin' });
   });

@@ -226,7 +226,7 @@ export const F4 = { long: 'x'.repeat(10_000) };
 // ---------------------------------------------------------------------------------------------------------------------
 
 export const U1 = { mixed: '?utm_source=Facebook&utm_medium=Paid&utm_campaign=hh_test', lower: '?utm_source=facebook&utm_medium=paid&utm_campaign=hh_test' };
-export const U2 = { search: '?gclid=EAIaIQobChMI123' };
+export const U2 = { search: '?gclid=EAIaIQobChMI123', manual: '?utm_source=Google&utm_medium=CPC&utm_campaign=standortcheck_brand' };
 export const U3 = { search: '?fbclid=IwAR0abc' };
 export const U5 = { search: '?utm_source=&utm_campaign=hh_test', blankSource: '?utm_source=%20%20&utm_campaign=hh_test' };
 export const U6 = { long: 'a'.repeat(600), script: '<script>alert(1)</script>' };

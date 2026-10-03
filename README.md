@@ -2,7 +2,7 @@
 
 Case study for Planeco Building (Tech & Automation). A free "site check" offer: mobile form → Supabase → confirmation email → sales dashboard with atomic claiming, XLSX export, channel report and address enrichment. Runs entirely on free tiers. UI in German, docs in English.
 
-**Live:** https://planeco-standort-check.vercel.app · **Dashboard:** https://planeco-standort-check.vercel.app/dashboard (logins in the submission email) · **Notes:** [NOTES.md](NOTES.md)
+**Live:** https://planeco-standort-check.vercel.app · **Dashboard:** https://planeco-standort-check.vercel.app/dashboard (logins in the submission email) · **Notes:** [NOTES.md](NOTES.md) · **Details:** [DECISIONS.md](DECISIONS.md)
 
 ## Try it
 - Plain form: [`/`](https://planeco-standort-check.vercel.app/)
@@ -14,15 +14,15 @@ Case study for Planeco Building (Tech & Automation). A free "site check" offer: 
 
 Emails at `example.com/.net/.org`, `test.de` and the `.test`/`.example`/`.invalid` TLDs are stored as test leads but never mailed (protects the sender reputation). Real addresses get one confirmation per 24 h at most.
 
-The five case samples are seeded as test data. In the dashboard they look like this:
+The five case samples are seeded as test data. Expected dashboard view (#1, #2, #3, #5 verified live during development; full seeded set: see [Tested on](#tested-on)):
 
 | # | Sample | Dashboard |
 |---|---|---|
-| 1 | Thomas Ahrens, Hauptstraße 14, 01067 Dresden | Außerhalb · Berlin ~164 km · Hausgenau, but "PLZ passt nicht zur Straße (gefunden: 01097)" · Meta Ads |
-| 2 | Marion Beckmann, "Adresse unbekannt": Lindenweg 3, Neustadt | Unklar · Mehrdeutig (candidates in three federal states) · Google Ads |
-| 3 | Kai Ruthenberg, Osterstraße 88, 22765 Hamburg | Im Gebiet · Hamburg · Straßengenau (house number not in OSM, PLZ mismatch) · Google Ads |
+| 1 | Thomas Ahrens, Hauptstraße 14, 01067 Dresden | Außerhalb · Berlin ~164 km · Hausgenau, but "PLZ passt nicht zur Straße (gefunden: 01097)" · Paid Social / Meta Ads |
+| 2 | Marion Beckmann, "Adresse unbekannt": Lindenweg 3, Neustadt | Unklar · Mehrdeutig (candidates in three federal states) · Paid Search / Google Ads |
+| 3 | Kai Ruthenberg, Osterstraße 88, 22765 Hamburg | Im Gebiet · Hamburg · Straßengenau (house number not in OSM, PLZ mismatch) · Paid Search / Google Ads (manual UTM tagging, no gclid) |
 | 4 | Thomas Ahrens again, phone `004940123456` | Duplicate of #1 (phone + address): hidden in the default view, #1 shows "2 Anfragen"; visible with "Alle Einzelanfragen" |
-| 5 | Jörg Klöpper, Am Mühlenteich 7, 23627 Groß Grönau | Randlage · Hamburg ~55 km · Nur PLZ-genau (street not in OSM) · Organic Search |
+| 5 | Jörg Klöpper, Am Mühlenteich 7, 23627 Groß Grönau | Randlage · Hamburg ~55 km · Nur PLZ-genau (street not in OSM) · Organic Search (google.de) |
 
 The report (`/dashboard/report`) excludes test data by default; "Testdaten einbeziehen" shows the seeded channels.
 
@@ -38,13 +38,13 @@ GitHub Actions daily ─▶ /api/health (liveness + backlog counts, no lead data
 ```
 If the database is unreachable at submit, the lead is mailed to a fallback inbox and the user still sees success (`202`).
 
-Key decisions (details in [NOTES.md](NOTES.md)):
+Key decisions (summary in [NOTES.md](NOTES.md), details in [DECISIONS.md](DECISIONS.md)):
 - Save first, side effects later (each with a status column, attempt cap and daily retry).
 - Accept and flag instead of reject.
 - Store facts, derive verdicts at read time (channel, service area, badges).
 - Atomic claim via a row lock; duplicates inherit the owner.
 - XLSX instead of CSV, with every text cell typed as text.
-- No cookies, no localStorage, no pixels: attribution comes from the URL at submit.
+- No cookies on the public form, no localStorage, no pixels: attribution comes from the URL at submit. (The dashboard uses Supabase auth cookies for the login session.)
 
 ## Local development
 ```bash
@@ -63,7 +63,7 @@ Database setup (Supabase SQL editor):
    select id, 'Vertrieb A' from auth.users where email = '<user-a email>';
    ```
 
-Seed the five samples (posts through the real API, so it exercises the whole pipeline):
+Seed the five samples (posts through the real API, so it exercises the whole pipeline; fixed idempotency keys make a re-run a replay, not a duplicate; exits non-zero if a sample is not stored):
 ```bash
 node scripts/seed-samples.mjs https://<your-deployment>
 ```
@@ -83,13 +83,13 @@ See `.env.example`.
   - `email/` (Brevo, confirmation rules, MX check, fallback), `dashboard/` (filters, paged loading), `export/xlsx.ts`, `report.ts`, `maintenance/`, `labels.ts`
 - `supabase/migrations/` — schema, functions (`claim_lead`, `release_lead`, `set_lead_status`, `set_lead_note`), RLS, `0004`/`0005` additions.
 - `scripts/seed-samples.mjs` — the five case samples.
-- `tests/` — Vitest, 355 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
+- `tests/` — Vitest, 360 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
 
 ## Tested on
-Automated: `npm test` (355 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
+Automated: `npm test` (360 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
 
 Verified against production / the live database:
-- **Case samples:** enrichment and duplicate detection on production matched the expectations for all five (#1 house-level but PLZ mismatch, found 01097 → Außerhalb; #2 ambiguous across three states; #3 street-level, PLZ mismatch, DE-HH; #4 duplicate of #1 via phone + address; #5 postcode-level, ~55 km from Hamburg → Randlage).
+- **Case samples:** #1, #2, #3 and #5 verified live during development (#1 house-level but PLZ mismatch, found 01097 → Außerhalb; #2 ambiguous across three states; #3 street-level, PLZ mismatch, DE-HH; #5 postcode-level, ~55 km from Hamburg → Randlage). For #4, the phone match with #1 (`004940123456` = `+49 40 / 123 456`) is unit-tested. Full seeded set on production: pending (seeded after the development test rows are removed).
 - **Claiming (C-1):** two concurrent `claim_lead` calls on the same lead → exactly one wins (row lock).
 - **Mail claim:** two concurrent mail claims → exactly one sends; a claim stuck in `sending` for more than 10 minutes is retried.
 - **Access (C-7):** RPC calls without a session are denied (401 / `42501`); `/dashboard` redirects to `/login` when logged out; the export is POST-only (GET → 405) and checks the session itself.
