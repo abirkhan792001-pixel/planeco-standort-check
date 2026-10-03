@@ -6,10 +6,12 @@ export async function middleware(request: NextRequest) {
   const supabase = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
     cookies: {
       getAll: () => request.cookies.getAll(),
-      setAll: (list) => {
+      setAll: (list, headers) => {
         list.forEach(({ name, value }) => request.cookies.set(name, value));
         response = NextResponse.next({ request });
         list.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        // No-cache headers from @supabase/ssr: a response that sets auth cookies must never be cached by a CDN.
+        Object.entries(headers ?? {}).forEach(([k, v]) => response.headers.set(k, v));
       },
     },
   });
