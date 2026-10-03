@@ -7,7 +7,8 @@ export const MAX_ENRICHMENT_ATTEMPTS = 3;
 export const EMAIL_MAX_AGE_HOURS = 24;
 export const ENRICHMENT_MAX_AGE_DAYS = 7;
 
-const RESERVED_DOMAINS = ['example.com', 'example.net', 'example.org'];
+// test.de is a real domain, but reviewers type it as a fake address (spec E-3): treated as a test lead, never mailed.
+const RESERVED_DOMAINS = ['example.com', 'example.net', 'example.org', 'test.de'];
 const RESERVED_TLDS = ['example', 'test', 'invalid', 'localhost'];
 
 export function emailDomain(email: string): string {

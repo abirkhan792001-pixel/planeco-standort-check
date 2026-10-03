@@ -38,7 +38,7 @@ export function classifyChannel(a: RawAttribution, ownHost: string): ChannelInfo
       : { group: 'Organic Social', channel: 'Meta (organisch)', campaign };
   }
   if (med && PAID.has(med)) return { group: 'Paid Other', channel: `Paid – ${src ?? 'unbekannt'}`, campaign };
-  if (anyUtm) return { group: med === 'email' ? 'Email' : 'Campaign', channel: src ?? '(ohne Quelle)', campaign };
+  if (anyUtm) return { group: med === 'email' ? 'Email' : 'Campaign', channel: src ?? 'unbekannt', campaign };
   if (clean(a.fbclid)) return { group: 'Social (unklar)', channel: 'Facebook/Instagram (unklar ob bezahlt)', campaign };
 
   const host = hostOf(a.referrer);

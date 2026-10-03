@@ -33,9 +33,8 @@ function levenshtein(a: string, b: string): number {
 /** Parcel numbers cannot be geocoded; spec §15.1 flags such descriptions as cadastral_only. */
 const CADASTRAL = /flurst(ü|ue)ck|gemarkung|flur\s*\d/i;
 
-// Typographic dashes (U+2010 hyphen … U+2015 horizontal bar, U+2212 minus) are folded to "-" so "14–16" equals "14-16".
-const DASHES = /[‐-―−]/g;
-const houseKey = (s: string) => normalizeHouseNumber(s).replace(DASHES, '-');
+// normalizeHouseNumber also folds typographic dashes, so "14–16" equals "14-16".
+const houseKey = normalizeHouseNumber;
 
 /**
  * Keys a hit's house number can be matched by: the whole value ("14-16", "14/1") plus its parts when it lists several
@@ -141,6 +140,17 @@ export function evaluateGeocode(input: GeoInput, plz: OpenPlzLocality[] | null, 
   if (hn && !withHouse) flags.add('house_not_found');
   const found = best.address.postcode ?? null;
   if (found && input.postalCode && !postcodeMatches(best, input.postalCode)) flags.add('plz_mismatch');
+
+  // municipalityKey and district belong to the OpenPLZ pick. A verified hit in another municipality (typed city and PLZ
+  // contradict each other, A-6) would otherwise be reported with the key and district of the wrong one.
+  const hitPlace = hitMunicipality(best);
+  if (plzPick && hitPlace) {
+    const pickNames = [plzPick.municipality?.name.split(',')[0], plzPick.name].map((n) => normalizePlace(n ?? ''));
+    if (!pickNames.includes(normalizePlace(hitPlace))) {
+      result.municipalityKey = null;
+      result.district = null;
+    }
+  }
 
   Object.assign(result, {
     precision: withHouse ? 'house' : 'street',

@@ -4,7 +4,7 @@ export function makeLeadRow(o: Partial<LeadRow> = {}): LeadRow {
   return {
     id: '00000000-0000-4000-8000-000000000001', created_at: '2026-10-01T08:00:00Z', idempotency_key: '00000000-0000-4000-8000-0000000000aa',
     is_test: false, first_name: 'Thomas', last_name: 'Ahrens', email: 'thomas@gmx.de', email_normalized: 'thomas@gmx.de',
-    phone_raw: '+49 40 / 123 456', phone_e164: '+4940123456', phone_valid: true, reachability: [],
+    phone_raw: '+49 40 / 123 456', phone_e164: '+4940123456', phone_valid: true, phone_extension: null, reachability: [],
     address_unknown: false, street: 'Hauptstraße', house_number: '14', postal_code: '01067', city: 'Dresden', plot_note: null,
     address_key: 'hauptstrasse|14|01067', project_type: null, privacy_notice_version: '2026-09-v1',
     utm_source: null, utm_medium: null, utm_campaign: null, utm_term: null, utm_content: null,

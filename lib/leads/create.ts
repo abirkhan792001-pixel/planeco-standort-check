@@ -66,6 +66,7 @@ export function buildLeadInsert(
     phone_raw: p.phone,
     phone_e164: phone.e164,
     phone_valid: phone.valid,
+    phone_extension: phone.extension,
     reachability: p.reachability,
     address_unknown: p.addressUnknown,
     street: known ? p.street : null,

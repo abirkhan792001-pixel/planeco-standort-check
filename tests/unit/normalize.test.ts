@@ -19,7 +19,7 @@ describe('normalizePhone (case samples)', () => {
   });
 
   it('returns null for fewer than 6 digits', () => {
-    expect(normalizePhone('12345')).toEqual({ e164: null, valid: false });
+    expect(normalizePhone('12345')).toEqual({ e164: null, valid: false, extension: null });
   });
 
   it('never throws on garbage', () => {

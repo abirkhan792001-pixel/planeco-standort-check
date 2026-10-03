@@ -29,6 +29,7 @@ export type LeadRow = {
   phone_raw: string;
   phone_e164: string | null;
   phone_valid: boolean;
+  phone_extension: string | null;
   reachability: Reachability[];
   address_unknown: boolean;
   street: string | null;

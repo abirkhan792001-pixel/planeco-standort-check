@@ -1,11 +1,18 @@
 import { z } from 'zod';
 import { ATTRIBUTION_KEYS } from '@/lib/attribution/types';
+import { toAsciiDigits } from './normalize';
 import { PROJECT_TYPES, REACHABILITY } from './types';
 
 const NUL = String.fromCharCode(0);
 const BAD_CHARS = 'Ungültige Zeichen';
 const noNul = (v: string) => !v.includes(NUL);
 const stripNul = (v: string) => v.split(NUL).join('');
+const IDN_DOMAIN = 'Bitte E-Mail ohne Umlaute in der Domain eingeben';
+/** Spec E-7 / S7: IDN domains are rejected. Judged only when there is an "@"; anything else gets the generic email error. */
+const asciiDomain = (v: string) => {
+  const at = v.lastIndexOf('@');
+  return at < 0 || !/[^\u0000-\u007f]/.test(v.slice(at + 1));
+};
 
 const optText = (max: number) => z.string().trim().max(max).refine(noNul, BAD_CHARS).default('');
 // Attribution values and the honeypot are not user-facing: NULs are stripped silently instead of rejected.
@@ -24,9 +31,11 @@ export const leadPayloadSchema = z
     isTest: z.boolean().default(false),
     firstName: z.string().trim().min(1, 'Bitte Vornamen angeben').max(100, 'Maximal 100 Zeichen').refine(noNul, BAD_CHARS),
     lastName: z.string().trim().min(1, 'Bitte Nachnamen angeben').max(100, 'Maximal 100 Zeichen').refine(noNul, BAD_CHARS),
-    email: z.string().trim().max(254).email('Bitte eine gültige E-Mail-Adresse angeben').refine(noNul, BAD_CHARS),
+    // The IDN check sits before .email() so its message is the first one for the field (fieldErrors keeps the first).
+    email: z.string().trim().max(254).refine(asciiDomain, IDN_DOMAIN).email('Bitte eine gültige E-Mail-Adresse angeben').refine(noNul, BAD_CHARS),
     phone: z.string().trim().max(40).refine(noNul, BAD_CHARS).refine((v) => {
-      const digits = v.replace(/\D/g, '').length;
+      if (v.includes('@')) return false; // an email address typed into the phone field (P-8), even one with 6+ digits
+      const digits = toAsciiDigits(v).replace(/\D/g, '').length;
       return digits >= 6 && digits <= 15;
     }, 'Bitte eine Telefonnummer angeben, unter der wir Sie erreichen'),
     reachability: z.array(z.enum(REACHABILITY)).max(3).default([]),
@@ -46,7 +55,7 @@ export const leadPayloadSchema = z
       return;
     }
     if (!v.street) ctx.addIssue({ code: 'custom', path: ['street'], message: 'Bitte Straße angeben' });
-    if (!/^\d{5}$/.test(v.postalCode)) ctx.addIssue({ code: 'custom', path: ['postalCode'], message: 'Bitte eine 5-stellige PLZ angeben' });
+    if (!/^\d{5}$/.test(v.postalCode)) ctx.addIssue({ code: 'custom', path: ['postalCode'], message: 'Bitte eine 5-stellige deutsche PLZ angeben – wir prüfen nur Grundstücke in Deutschland' });
     if (!v.city) ctx.addIssue({ code: 'custom', path: ['city'], message: 'Bitte Ort angeben' });
   });
 
