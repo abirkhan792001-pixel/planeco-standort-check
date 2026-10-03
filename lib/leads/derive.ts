@@ -2,11 +2,11 @@ import { classifyChannel } from '@/lib/attribution/classify';
 import type { ChannelInfo } from '@/lib/attribution/types';
 import { SERVICE_AREA } from '@/lib/config/service-area';
 import { assessServiceArea, type AreaAssessment } from '@/lib/geo/service-area';
-import type { LeadRow } from './types';
+import type { LeadListRow, LeadRow } from './types';
 
 /** `n/a` = enrichment skipped (spam): there is no address verdict at all, the badge shows "—". */
 export type AddressQuality = 'house' | 'street' | 'postcode' | 'locality' | 'none' | 'ambiguous' | 'pending' | 'n/a';
-export type LeadView = LeadRow & {
+export type LeadView = LeadListRow & {
   channel: ChannelInfo; area: AreaAssessment; addressQuality: AddressQuality;
   ownerName: string | null; groupSize: number; plotLabel: string;
 };
@@ -19,7 +19,7 @@ export function ownHost(): string {
   }
 }
 
-function addressQuality(r: LeadRow): AddressQuality {
+function addressQuality(r: LeadListRow): AddressQuality {
   // Only a finished enrichment has a precision; pending/failed must not read as "Nicht gefunden".
   if (r.enrichment_status === 'skipped') return 'n/a';
   if (r.enrichment_status !== 'done') return 'pending';
@@ -27,7 +27,7 @@ function addressQuality(r: LeadRow): AddressQuality {
   return r.geo_precision ?? 'none';
 }
 
-function plotLabel(r: LeadRow): string {
+function plotLabel(r: LeadListRow): string {
   if (r.address_unknown) return `Adresse unbekannt: ${r.plot_note ?? ''}`.trim();
   return `${r.street ?? ''}${r.house_number ? ` ${r.house_number}` : ''}, ${r.postal_code ?? ''} ${r.city ?? ''}`.trim();
 }
@@ -45,7 +45,7 @@ export function missingRootIds(rows: Pick<LeadRow, 'id' | 'duplicate_of'>[]): st
 }
 
 /** Pure: all "opinions" (channel, area verdict, badges) are computed here from stored facts. */
-export function deriveLeadViews(rows: LeadRow[], profiles: { id: string; display_name: string }[], host: string): LeadView[] {
+export function deriveLeadViews(rows: LeadListRow[], profiles: { id: string; display_name: string }[], host: string): LeadView[] {
   const names = new Map(profiles.map((p) => [p.id, p.display_name]));
   const dupCounts = new Map<string, number>();
   for (const r of rows) if (r.duplicate_of) dupCounts.set(r.duplicate_of, (dupCounts.get(r.duplicate_of) ?? 0) + 1);

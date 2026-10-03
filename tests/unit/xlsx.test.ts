@@ -67,12 +67,69 @@ describe('buildLeadsWorkbook', () => {
     expect(ws.getRow(2).getCell(col('Gebiet')).value).toBe('—');
   });
 
-  it('writes numbers as numbers and missing values as empty cells', async () => {
+  it('writes numbers as numbers', async () => {
     const views = deriveLeadViews([makeLeadRow({ enrichment_status: 'done', geo_precision: 'house', geo_lat: 53.87, geo_lon: 10.69, duplicate_of: null })], [], 'x');
     const ws = await readBack(await buildLeadsWorkbook(views));
     const dist = ws.getRow(2).getCell(col('Entfernung km'));
     expect(typeof dist.value).toBe('number');
     expect(ws.getRow(2).getCell(col('Anfragen (Gruppe)')).value).toBe(1);
-    expect(ws.getRow(2).getCell(col('Notiz')).value ?? '').toBe('');
+  });
+
+  it('writes missing values as truly blank cells, not as empty strings', async () => {
+    const views = deriveLeadViews([makeLeadRow({ sales_note: null, plot_note: null, phone_extension: null, is_test: false, reachability: [], geo_flags: [], duplicate_of: null, disqualify_reason: null })], [], 'x');
+    const ws = await readBack(await buildLeadsWorkbook(views));
+    for (const h of ['Notiz', 'Angaben zum Grundstück', 'Durchwahl', 'Test', 'Erreichbarkeit', 'Adress-Hinweise', 'Grund', 'Bearbeiter', 'Duplikat von', 'Nächster Hub', 'Entfernung km', 'Breitengrad', 'Längengrad', 'utm_source', 'gclid']) {
+      expect(col(h), h).toBeGreaterThan(0);
+      const cell = ws.getRow(2).getCell(col(h));
+      expect(cell.value, h).toBeNull();
+      expect(cell.type, h).toBe(ExcelJS.ValueType.Null);
+    }
+  });
+
+  it.each([
+    ['HYPERLINK formula', '=HYPERLINK("http://x","klick")'],
+    ['plus formula', '+SUM(1)'],
+    ['at command', '@cmd'],
+    ['minus arithmetic', '-2+3'],
+  ])('keeps formula-like text in a name as a plain string (F-3: %s)', async (_label, text) => {
+    const views = deriveLeadViews([makeLeadRow({ first_name: text, last_name: text, plot_note: text, sales_note: text })], [], 'x');
+    const ws = await readBack(await buildLeadsWorkbook(views));
+    for (const h of ['Vorname', 'Nachname', 'Angaben zum Grundstück', 'Notiz']) {
+      const cell = ws.getRow(2).getCell(col(h));
+      expect(cell.type, h).toBe(ExcelJS.ValueType.String);
+      expect(cell.value, h).toBe(text);
+      expect(cell.formula, h).toBeUndefined();
+    }
+  });
+
+  it('adds the raw attribution and geo facts of spec §17', async () => {
+    const views = deriveLeadViews([makeLeadRow({
+      referrer: 'https://www.google.com/', landing_path: '/standort-check?x=1', gbraid: 'gb1', wbraid: 'wb1', msclkid: 'ms1', placement: 'plc', affiliate: 'aff',
+      enrichment_status: 'done', geo_precision: 'house', geo_lat: 53.8697, geo_lon: 10.6866,
+    })], [], 'x');
+    const ws = await readBack(await buildLeadsWorkbook(views));
+    const row = ws.getRow(2);
+    const expectText = { referrer: 'https://www.google.com/', landing_path: '/standort-check?x=1', gbraid: 'gb1', wbraid: 'wb1', msclkid: 'ms1', placement: 'plc', affiliate: 'aff' };
+    for (const [h, v] of Object.entries(expectText)) {
+      expect(col(h), h).toBeGreaterThan(0);
+      expect(row.getCell(col(h)).value, h).toBe(v);
+      expect(row.getCell(col(h)).type, h).toBe(ExcelJS.ValueType.String);
+    }
+    expect(row.getCell(col('Breitengrad')).value).toBe(53.8697);
+    expect(row.getCell(col('Breitengrad')).type).toBe(ExcelJS.ValueType.Number);
+    expect(row.getCell(col('Längengrad')).value).toBe(10.6866);
+    expect(row.getCell(col('Längengrad')).type).toBe(ExcelJS.ValueType.Number);
+  });
+
+  it('uses the badge wording for the area verdict (shared labels)', async () => {
+    const views = deriveLeadViews([
+      makeLeadRow({ id: '00000000-0000-4000-8000-000000000001', enrichment_status: 'done', geo_precision: 'none' }), // no coordinates -> unclear
+      makeLeadRow({ id: '00000000-0000-4000-8000-000000000002' }), // enrichment pending
+      makeLeadRow({ id: '00000000-0000-4000-8000-000000000003', enrichment_status: 'done', geo_precision: 'house', geo_lat: 53.8697, geo_lon: 10.6866 }),
+    ], [], 'x');
+    const ws = await readBack(await buildLeadsWorkbook(views));
+    expect(ws.getRow(2).getCell(col('Gebiet')).value).toBe('Unklar – bitte prüfen');
+    expect(ws.getRow(3).getCell(col('Gebiet')).value).toBe('Wird geprüft');
+    expect(['Im Gebiet', 'Randlage', 'Außerhalb']).toContain(ws.getRow(4).getCell(col('Gebiet')).value);
   });
 });

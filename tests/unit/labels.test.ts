@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { geoFlagTexts, mailStatusLabel } from '@/lib/labels';
+import { ADDRESS_TEXT, AREA_TEXT, geoFlagTexts, mailStatusLabel } from '@/lib/labels';
 import { makeLeadRow } from '../fixtures/lead-row';
 
 describe('mailStatusLabel (spec §20, E-2)', () => {
@@ -40,4 +40,19 @@ describe('geoFlagTexts (A-1, A-6)', () => {
       .toEqual(['Ort passt nicht zur PLZ (eingegeben: München, gefunden: Hamburg)']);
   });
   it('unknown flags pass through', () => expect(geoFlagTexts(makeLeadRow({ geo_flags: ['something_new'] }))).toEqual(['something_new']));
+});
+
+describe('ADDRESS_TEXT / AREA_TEXT (single source for badges and export)', () => {
+  it('address quality wording', () => {
+    expect(ADDRESS_TEXT).toEqual({
+      house: 'Hausgenau', street: 'Straßengenau', postcode: 'Nur PLZ-genau', locality: 'Nur Ort', none: 'Nicht gefunden',
+      ambiguous: 'Mehrdeutig', pending: 'Wird geprüft', 'n/a': '—',
+    });
+  });
+  it('area verdict wording without distance', () => {
+    expect(AREA_TEXT).toEqual({
+      inside: 'Im Gebiet', edge: 'Randlage', outside: 'Außerhalb', unclear: 'Unklar – bitte prüfen', pending: 'Wird geprüft',
+      failed: 'Prüfung fehlgeschlagen', 'n/a': '—',
+    });
+  });
 });

@@ -9,3 +9,11 @@ export function formatBerlin(iso: string | null): string {
   const parts = Object.fromEntries(fmt.formatToParts(new Date(iso)).map((p) => [p.type, p.value]));
   return `${parts.day}.${parts.month}.${parts.year} ${parts.hour}:${parts.minute}`;
 }
+
+const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit' });
+
+/** Calendar day in Europe/Berlin as yyyy-mm-dd (file names): near midnight UTC and Berlin disagree on the date. */
+export function berlinDate(d: Date = new Date()): string {
+  const parts = Object.fromEntries(dayFmt.formatToParts(d).map((p) => [p.type, p.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}

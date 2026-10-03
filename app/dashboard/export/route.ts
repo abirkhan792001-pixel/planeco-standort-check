@@ -4,6 +4,7 @@ import { deriveLeadViews, ownHost } from '@/lib/leads/derive';
 import { applyFilters, filtersFromSearchParams, sortRows } from '@/lib/dashboard/filters';
 import { loadLeadWindow } from '@/lib/dashboard/load';
 import { buildLeadsWorkbook } from '@/lib/export/xlsx';
+import { berlinDate } from '@/lib/format';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -14,6 +15,24 @@ export const maxDuration = 60;
 const EXPORT_LIMIT = 5000;
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
+
+/**
+ * The export is a plain form POST that replaces the dashboard tab, so a failure must not end in raw JSON. 400 and 500 get a
+ * small German page with a way back (static text only: no row data, no error detail). 401 stays JSON: the middleware
+ * already redirects a logged-out browser to /login, so only scripted requests see it.
+ */
+function errorPage(status: 400 | 500) {
+  const html = `<!doctype html>
+<html lang="de">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Export fehlgeschlagen</title></head>
+<body style="font-family: system-ui, sans-serif; max-width: 32rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.5">
+<h1>Export fehlgeschlagen</h1>
+<p>Der Export konnte nicht erstellt werden – bitte zurück zum Dashboard und noch einmal versuchen.</p>
+<p><a href="/dashboard">Zurück zum Dashboard</a></p>
+</body>
+</html>`;
+  return new NextResponse(html, { status, headers: { 'Content-Type': 'text/html; charset=utf-8', ...NO_STORE } });
+}
 
 /**
  * POST only: the dashboard's Export form sends the active filters as hidden fields, so neither filters nor search text
@@ -29,7 +48,7 @@ export async function POST(req: NextRequest) {
   try {
     form = await req.formData();
   } catch {
-    return NextResponse.json({ error: 'bad_request' }, { status: 400, headers: NO_STORE });
+    return errorPage(400);
   }
   const params = new URLSearchParams();
   for (const [k, v] of form.entries()) if (typeof v === 'string') params.append(k, v);
@@ -45,19 +64,25 @@ export async function POST(req: NextRequest) {
     // Log code/message only, never row data.
     const err = e as { code?: string; message?: string };
     console.error('export: leads query failed', { code: err.code, message: err.message });
-    return NextResponse.json({ error: 'db' }, { status: 500, headers: NO_STORE });
+    return errorPage(500);
   }
   // Without profiles the export still works; owners then read "Unbekannt" (same as the dashboard).
   if (profiles.error) console.error('export: profiles query failed', { code: profiles.error.code, message: profiles.error.message });
 
-  const views = deriveLeadViews(rows, profiles.data ?? [], ownHost());
-  const sorted = sortRows(applyFilters(views, f, user.id), f.sort, f.dir);
-  const body = await buildLeadsWorkbook(sorted);
-  const date = new Date().toISOString().slice(0, 10);
+  let body: Buffer;
+  try {
+    const views = deriveLeadViews(rows, profiles.data ?? [], ownHost());
+    const sorted = sortRows(applyFilters(views, f, user.id), f.sort, f.dir);
+    body = await buildLeadsWorkbook(sorted);
+  } catch (e) {
+    console.error('export: building the workbook failed', { message: (e as Error).message });
+    return errorPage(500);
+  }
+  // Berlin calendar day (spec §17 file name), not UTC: after 22:00/23:00 UTC the two differ.
   return new NextResponse(new Uint8Array(body), {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="standort-check-anfragen-${date}.xlsx"`,
+      'Content-Disposition': `attachment; filename="standort-check-anfragen-${berlinDate()}.xlsx"`,
       'Cache-Control': 'no-store',
     },
   });

@@ -16,7 +16,7 @@ export type Reachability = (typeof REACHABILITY)[number];
 
 export type DeviceType = 'mobile' | 'tablet' | 'desktop' | 'unknown';
 
-/** One row of public.leads, exactly as selected with `select('*')`. */
+/** One row of public.leads with every column. */
 export type LeadRow = {
   id: string;
   created_at: string;
@@ -88,3 +88,6 @@ export type LeadRow = {
   geo_candidates: unknown;
   geo_raw: unknown;
 };
+
+/** A lead as the dashboard list and the export load it: every column except the bulky `geo_raw` debug payload. */
+export type LeadListRow = Omit<LeadRow, 'geo_raw'>;

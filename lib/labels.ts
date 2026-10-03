@@ -1,3 +1,5 @@
+import type { AreaVerdict } from '@/lib/geo/service-area';
+import type { AddressQuality } from '@/lib/leads/derive';
 import type { DisqualifyReason, LeadRow, LeadStatus, ProjectType, Reachability } from '@/lib/leads/types';
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
@@ -18,6 +20,24 @@ export const STATE_LABELS: Record<string, string> = {
   'DE-SH': 'Schleswig-Holstein', 'DE-HH': 'Hamburg', 'DE-NI': 'Niedersachsen', 'DE-HB': 'Bremen', 'DE-NW': 'Nordrhein-Westfalen',
   'DE-HE': 'Hessen', 'DE-RP': 'Rheinland-Pfalz', 'DE-BW': 'Baden-Württemberg', 'DE-BY': 'Bayern', 'DE-SL': 'Saarland',
   'DE-BE': 'Berlin', 'DE-BB': 'Brandenburg', 'DE-MV': 'Mecklenburg-Vorpommern', 'DE-SN': 'Sachsen', 'DE-ST': 'Sachsen-Anhalt', 'DE-TH': 'Thüringen',
+};
+
+/**
+ * Area verdict in German, without the distance (the dashboard badge appends hub and km). "n/a" = enrichment skipped
+ * (spam): a dash, never the raw code. Shared by the dashboard badge and the XLSX export.
+ */
+export const AREA_TEXT: Record<AreaVerdict, string> = {
+  inside: 'Im Gebiet', edge: 'Randlage', outside: 'Außerhalb', unclear: 'Unklar – bitte prüfen', pending: 'Wird geprüft',
+  failed: 'Prüfung fehlgeschlagen', 'n/a': '—',
+};
+
+/**
+ * Address precision in German. "pending" reads "Wird geprüft" (the badge shortens it to an ellipsis); "n/a" (spam,
+ * enrichment skipped) is a dash. Shared by the dashboard badge and the XLSX export.
+ */
+export const ADDRESS_TEXT: Record<AddressQuality, string> = {
+  house: 'Hausgenau', street: 'Straßengenau', postcode: 'Nur PLZ-genau', locality: 'Nur Ort', none: 'Nicht gefunden',
+  ambiguous: 'Mehrdeutig', pending: 'Wird geprüft', 'n/a': '—',
 };
 
 export type LabelTone = 'green' | 'amber' | 'red' | 'grey' | 'blue';

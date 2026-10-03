@@ -1,6 +1,6 @@
-import type { AreaAssessment } from '@/lib/geo/service-area';
+import type { AreaAssessment, AreaVerdict } from '@/lib/geo/service-area';
 import type { AddressQuality, LeadView } from '@/lib/leads/derive';
-import { geoFlagTexts, mailStatusLabel, STATUS_LABELS, type LabelTone } from '@/lib/labels';
+import { ADDRESS_TEXT, AREA_TEXT, geoFlagTexts, mailStatusLabel, STATUS_LABELS, type LabelTone } from '@/lib/labels';
 
 const base = 'inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium';
 const tone: Record<LabelTone, string> = {
@@ -8,29 +8,30 @@ const tone: Record<LabelTone, string> = {
   grey: 'bg-stone-200 text-stone-700', blue: 'bg-sky-100 text-sky-900',
 };
 
+const areaTone: Record<AreaVerdict, string> = {
+  inside: tone.green, edge: tone.amber, outside: tone.red, unclear: tone.amber, pending: tone.grey, failed: tone.grey, 'n/a': tone.grey,
+};
+
 export function AreaBadge({ area }: { area: AreaAssessment }) {
+  const text = AREA_TEXT[area.verdict];
   const km = area.distanceKm !== undefined ? ` · ${area.hub} ${area.distanceKm} km` : '';
-  const map = {
-    inside: [tone.green, `Im Gebiet${km}`], edge: [tone.amber, `Randlage${km}`],
-    outside: [tone.red, `Außerhalb · nächster Hub: ${area.hub} ${area.distanceKm} km`],
-    unclear: [tone.amber, 'Unklar – bitte prüfen'], pending: [tone.grey, 'Wird geprüft'],
-    failed: [tone.grey, 'Prüfung fehlgeschlagen'], 'n/a': [tone.grey, '—'],
-  } as const;
-  const [cls, label] = map[area.verdict];
-  return <span className={`${base} ${cls}`}>{label}</span>;
+  const label = area.verdict === 'outside' ? `${text} · nächster Hub: ${area.hub} ${area.distanceKm} km`
+    : area.verdict === 'inside' || area.verdict === 'edge' ? `${text}${km}` : text;
+  return <span className={`${base} ${areaTone[area.verdict]}`}>{label}</span>;
 }
 
+const addressTone: Record<AddressQuality, string> = {
+  house: tone.green, street: tone.blue, postcode: tone.amber, locality: tone.amber, none: tone.red, ambiguous: tone.amber, pending: tone.grey,
+  'n/a': tone.grey,
+};
+
 export function AddressBadge({ lead }: { lead: LeadView }) {
-  const labels: Record<AddressQuality, [string, string]> = {
-    house: [tone.green, 'Hausgenau'], street: [tone.blue, 'Straßengenau'], postcode: [tone.amber, 'Nur PLZ-genau'],
-    locality: [tone.amber, 'Nur Ort'], none: [tone.red, 'Nicht gefunden'], ambiguous: [tone.amber, 'Mehrdeutig'], pending: [tone.grey, '…'],
-    'n/a': [tone.grey, '—'],
-  };
-  const [cls, label] = labels[lead.addressQuality];
+  const q = lead.addressQuality;
+  const label = q === 'pending' ? '…' : ADDRESS_TEXT[q]; // the export spells "pending" out; the narrow badge shows an ellipsis
   const flags = geoFlagTexts(lead);
   return (
-    <span className={`${base} ${cls}`} title={flags.join(' · ') || undefined}>
-      {label}{flags.length > 0 && lead.addressQuality !== 'ambiguous' ? ' ⚠' : ''}
+    <span className={`${base} ${addressTone[q]}`} title={flags.join(' · ') || undefined}>
+      {label}{flags.length > 0 && q !== 'ambiguous' ? ' ⚠' : ''}
     </span>
   );
 }
