@@ -1,36 +1,109 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Standort-Check — lead funnel prototype
 
-## Getting Started
+Case study for Planeco Building (Tech & Automation). A free "site check" offer: mobile form → Supabase → confirmation email → sales dashboard with atomic claiming, XLSX export, channel report and address enrichment. Runs entirely on free tiers. UI in German, docs in English.
 
-First, run the development server:
+**Live:** https://planeco-standort-check.vercel.app · **Dashboard:** https://planeco-standort-check.vercel.app/dashboard (logins in the submission email) · **Notes:** [NOTES.md](NOTES.md)
 
+## Try it
+- Plain form: [`/`](https://planeco-standort-check.vercel.app/)
+- Meta paid: [`/?utm_source=facebook&utm_medium=paid_social&utm_campaign=standortcheck_test`](https://planeco-standort-check.vercel.app/?utm_source=facebook&utm_medium=paid_social&utm_campaign=standortcheck_test)
+- Google Ads auto-tagging (no UTMs): [`/?gclid=TEST-GCLID-123`](https://planeco-standort-check.vercel.app/?gclid=TEST-GCLID-123)
+- Google manual tagging: [`/?utm_source=google&utm_medium=cpc&utm_campaign=standortcheck_brand`](https://planeco-standort-check.vercel.app/?utm_source=google&utm_medium=cpc&utm_campaign=standortcheck_brand)
+- Facebook click without UTMs (paid or organic is unknowable): [`/?fbclid=TEST-ORGANIC`](https://planeco-standort-check.vercel.app/?fbclid=TEST-ORGANIC)
+- Mark a submission as test data: [`/?test=1`](https://planeco-standort-check.vercel.app/?test=1)
+
+Emails at `example.com/.net/.org`, `test.de` and the `.test`/`.example`/`.invalid` TLDs are stored as test leads but never mailed (protects the sender reputation). Real addresses get one confirmation per 24 h at most.
+
+The five case samples are seeded as test data. In the dashboard they look like this:
+
+| # | Sample | Dashboard |
+|---|---|---|
+| 1 | Thomas Ahrens, Hauptstraße 14, 01067 Dresden | Außerhalb · Berlin ~164 km · Hausgenau, but "PLZ passt nicht zur Straße (gefunden: 01097)" · Meta Ads |
+| 2 | Marion Beckmann, "Adresse unbekannt": Lindenweg 3, Neustadt | Unklar · Mehrdeutig (candidates in three federal states) · Google Ads |
+| 3 | Kai Ruthenberg, Osterstraße 88, 22765 Hamburg | Im Gebiet · Hamburg · Straßengenau (house number not in OSM, PLZ mismatch) · Google Ads |
+| 4 | Thomas Ahrens again, phone `004940123456` | Duplicate of #1 (phone + address): hidden in the default view, #1 shows "2 Anfragen"; visible with "Alle Einzelanfragen" |
+| 5 | Jörg Klöpper, Am Mühlenteich 7, 23627 Groß Grönau | Randlage · Hamburg ~55 km · Nur PLZ-genau (street not in OSM) · Organic Search |
+
+The report (`/dashboard/report`) excludes test data by default; "Testdaten einbeziehen" shows the seeded channels.
+
+## Architecture
+```
+Ad click ─▶ / (form) ─POST /api/leads─▶ validate → spam check → normalize → dedupe → INSERT (Supabase, Frankfurt)
+                │                       └─ after(): confirmation mail (Brevo) → enrichment (OpenPLZ + Nominatim)
+                └─ GET /api/plz/{plz} (OpenPLZ proxy, CDN-cached: PLZ → Ort autofill)
+Sales ─login─▶ /dashboard (reads under RLS; writes only via Postgres functions: claim / release / status / note)
+               /dashboard/report · POST /dashboard/export (XLSX of the current filter)
+Vercel cron 04:00 UTC ─▶ /api/cron/maintenance (keep-alive query, mail + enrichment retries, close mails older than 24 h)
+GitHub Actions daily ─▶ /api/health (liveness + backlog counts, no lead data)
+```
+If the database is unreachable at submit, the lead is mailed to a fallback inbox and the user still sees success (`202`).
+
+Key decisions (details in [NOTES.md](NOTES.md)):
+- Save first, side effects later (each with a status column, attempt cap and daily retry).
+- Accept and flag instead of reject.
+- Store facts, derive verdicts at read time (channel, service area, badges).
+- Atomic claim via a row lock; duplicates inherit the owner.
+- XLSX instead of CSV, with every text cell typed as text.
+- No cookies, no localStorage, no pixels: attribution comes from the URL at submit.
+
+## Local development
 ```bash
+npm install
+cp .env.example .env.local   # fill in values
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm test                     # Vitest
+npx tsc --noEmit && npm run lint && npm run build
+```
+Database setup (Supabase SQL editor):
+1. Apply `supabase/migrations/0001_schema.sql` … `0005_phone_extension.sql` in order. `0004` adds the `sending` claim state for confirmation mails, `0005` the `phone_extension` column.
+2. In Authentication settings, **disable public sign-ups** (every logged-in user can read all leads, by design).
+3. Create the sales users in Supabase Auth, then give each a display name:
+   ```sql
+   insert into public.profiles (id, display_name)
+   select id, 'Vertrieb A' from auth.users where email = '<user-a email>';
+   ```
+
+Seed the five samples (posts through the real API, so it exercises the whole pipeline):
+```bash
+node scripts/seed-samples.mjs https://<your-deployment>
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment variables
+See `.env.example`.
+- **Server-only:** `SUPABASE_SECRET_KEY`, `BREVO_API_KEY`, `MAIL_SENDER_EMAIL`, `MAIL_SENDER_NAME`, `MAIL_REPLY_TO`, `FALLBACK_INBOX`, `CRON_SECRET`, `NOMINATIM_CONTACT` (required by the Nominatim usage policy), `PRIVACY_CONTACT_EMAIL`, `APP_BASE_URL`.
+- **Public:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CONTACT_PHONE`.
+- **GitHub Actions:** repository variable `APP_BASE_URL` for the keep-alive workflow.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project structure
+- `app/` — routes: form (`/`), `/datenschutz`, `/login`, `/dashboard` (list, `report`, `export`), `api/leads`, `api/plz/[plz]`, `api/health`, `api/cron/maintenance`.
+- `middleware.ts` — Supabase session refresh and the `/dashboard` → `/login` redirect (Next 15 naming). Every dashboard page, action and route handler checks the session again itself.
+- `lib/` — pure, unit-tested logic plus thin clients:
+  - `leads/` (schema, normalize, dedupe, create, side effects, derive), `attribution/` (capture, classify)
+  - `enrichment/` (OpenPLZ, Nominatim, evaluate), `geo/` (distance, service area), `config/` (`service-area.ts` is the one file to change once Planeco defines its area)
+  - `email/` (Brevo, confirmation rules, MX check, fallback), `dashboard/` (filters, paged loading), `export/xlsx.ts`, `report.ts`, `maintenance/`, `labels.ts`
+- `supabase/migrations/` — schema, functions (`claim_lead`, `release_lead`, `set_lead_status`, `set_lead_note`), RLS, `0004`/`0005` additions.
+- `scripts/seed-samples.mjs` — the five case samples.
+- `tests/` — Vitest, 355 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Tested on
+Automated: `npm test` (355 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
 
-## Learn More
+Verified against production / the live database:
+- **Case samples:** enrichment and duplicate detection on production matched the expectations for all five (#1 house-level but PLZ mismatch, found 01097 → Außerhalb; #2 ambiguous across three states; #3 street-level, PLZ mismatch, DE-HH; #4 duplicate of #1 via phone + address; #5 postcode-level, ~55 km from Hamburg → Randlage).
+- **Claiming (C-1):** two concurrent `claim_lead` calls on the same lead → exactly one wins (row lock).
+- **Mail claim:** two concurrent mail claims → exactly one sends; a claim stuck in `sending` for more than 10 minutes is retried.
+- **Access (C-7):** RPC calls without a session are denied (401 / `42501`); `/dashboard` redirects to `/login` when logged out; the export is POST-only (GET → 405) and checks the session itself.
+- **Confirmation mail:** delivered locally and in production; the throttle (one per address per 24 h) and the test-domain skip work; a production send that failed was retried and delivered by the daily job.
+- **Operations (O-1):** the production cron answers 401 without the secret and runs with it (its first step is the keep-alive query). The GitHub Actions ping is configured. The DB-down fallback (fallback inbox → `202`, otherwise `503` with a phone number) is implemented but has not been exercised against a paused project.
+- **Config:** Supabase public sign-up was found **enabled** despite the setup steps; it is now off (checked in the Supabase dashboard).
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### Manual checks (to be completed before submission)
+- [ ] iPhone Safari: form submits, success state readable without zooming
+- [ ] Android Chrome: same
+- [ ] Confirmation mail in Gmail — inbox or spam? (O-2)
+- [ ] Confirmation mail in GMX or web.de — inbox or spam? (O-2)
+- [ ] Two browsers, Vertrieb A and B: A claims, B gets "Bereits von … übernommen", B's status edit is disabled (C-2)
+- [ ] Expired session on the dashboard → redirect to login, no partial write (C-4)
+- [ ] Excel export opens with `+49 40 / 123 456` and `Groß Grönau` intact
+- [ ] Offline submit on a phone: German error, input stays in the form (F-8)
+- [ ] GitHub Actions keep-alive: first scheduled run is green (O-1)
