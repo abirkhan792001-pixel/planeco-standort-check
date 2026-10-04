@@ -43,6 +43,7 @@ export function LeadForm({ step, active, onStep }: { step: Step; active: boolean
   const successRef = useRef<HTMLHeadingElement>(null);
   const [focusSeq, setFocusSeq] = useState(0);
   const shown = useRef({ step, active });
+  const [settling, setSettling] = useState(false);
 
   useEffect(() => {
     setAttr(captureAttribution(window.location.search, document.referrer, window.location.pathname));
@@ -96,6 +97,15 @@ export function LeadForm({ step, active, onStep }: { step: Step; active: boolean
     const changed = shown.current.step !== step || shown.current.active !== active;
     shown.current = { step, active };
     if (active && changed) headingRef.current?.focus();
+  }, [step, active]);
+
+  // The click that picks a Vorhaben must not land on whatever the next step renders under the finger (a double-click would
+  // tick "Adresse unbekannt"), so pointer input is ignored briefly after each step change. Keyboard is unaffected.
+  useEffect(() => {
+    if (!active) return;
+    setSettling(true);
+    const t = setTimeout(() => setSettling(false), 350);
+    return () => { clearTimeout(t); setSettling(false); };
   }, [step, active]);
 
   // After a failed check, focus the first broken field of the (possibly new) current step. Runs after the effect above.
@@ -212,88 +222,90 @@ export function LeadForm({ step, active, onStep }: { step: Step; active: boolean
       <div className="mt-6"><LogoBadge /></div>
       <h1 id="step-title" ref={headingRef} tabIndex={-1} className={headingCls}>{STEP_TITLES[step]}</h1>
 
-      {step === 1 && (
-        <div className="mt-10">
-          <div role="group" aria-labelledby="step-title" data-field="projectType" tabIndex={-1}
-            aria-describedby={err('projectType') ? 'projectType-error' : undefined} className="space-y-3">
-            {PROJECT_TYPES.map((t) => (
-              <OptionCard key={t} active={v.projectType === t} icon={PROJECT_ICONS[t]} onClick={() => chooseProject(t)}>
-                {PROJECT_TYPE_LABELS[t]}
-              </OptionCard>
-            ))}
-          </div>
-          <FieldNote id="projectType" error={err('projectType')} />
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className="mt-10 grid items-center gap-8 md:grid-cols-[11rem_1fr]">
-          <GermanyMap className="mx-auto hidden w-40 md:block" />
-          <div className="space-y-4">
-            <label className="flex min-h-11 items-center gap-3 text-base text-ink">
-              <input type="checkbox" name="addressUnknown" className="size-5 accent-ink" checked={v.addressUnknown}
-                onChange={(e) => set('addressUnknown', e.target.checked)} />
-              Ich kenne die genaue Adresse noch nicht
-            </label>
-            {!v.addressUnknown && (
-              <>
-                <div className="grid grid-cols-[7.5rem_1fr] gap-3">
-                  <TextField id="postalCode" name="postalCode" label="PLZ" inputMode="numeric" autoComplete="off" maxLength={5}
-                    value={v.postalCode} onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, ''))}
-                    {...aria('postalCode', plzWarning)} />
-                  {localities.length > 1 ? (
-                    <SelectField id="city" name="city" label="Ort" value={v.city} onChange={(e) => set('city', e.target.value)} {...aria('city')}>
-                      <option value="">Bitte wählen</option>
-                      {localities.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
-                    </SelectField>
-                  ) : (
-                    <TextField id="city" name="city" label="Ort" autoComplete="off" value={v.city} onChange={(e) => set('city', e.target.value)}
-                      {...aria('city')} />
-                  )}
-                </div>
-                <FieldNote id="postalCode" error={err('postalCode')} hint={plzWarning ?? undefined} />
-                <FieldNote id="city" error={err('city')} />
-                <div className="grid grid-cols-[1fr_6.5rem] gap-3">
-                  <TextField id="street" name="street" label="Straße" autoComplete="off" value={v.street} onChange={(e) => set('street', e.target.value)}
-                    error={err('street')} {...aria('street')} />
-                  <TextField id="houseNumber" name="houseNumber" label="Nr." autoComplete="off" maxLength={10} value={v.houseNumber}
-                    onChange={(e) => set('houseNumber', e.target.value)} error={err('houseNumber')} {...aria('houseNumber')} />
-                </div>
-                <p className="text-sm text-muted">Die Adresse des Grundstücks – nicht Ihre Wohnadresse, falls abweichend. Keine Hausnummer? Einfach leer lassen.</p>
-              </>
-            )}
-            <TextArea id="plotNote" name="plotNote" rows={3} maxLength={1000}
-              label={v.addressUnknown ? 'Wo liegt das Grundstück? (z. B. Ort, Straße, Flurstück)' : 'Weitere Angaben (optional), z. B. Flurstück'}
-              value={v.plotNote} onChange={(e) => set('plotNote', e.target.value)} error={err('plotNote')} {...aria('plotNote')} />
-          </div>
-        </div>
-      )}
-
-      {step === 3 && (
-        <div className="mt-10 space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <TextField id="firstName" name="firstName" label="Vorname" autoComplete="given-name" value={v.firstName}
-              onChange={(e) => set('firstName', e.target.value)} error={err('firstName')} {...aria('firstName')} />
-            <TextField id="lastName" name="lastName" label="Nachname" autoComplete="family-name" value={v.lastName}
-              onChange={(e) => set('lastName', e.target.value)} error={err('lastName')} {...aria('lastName')} />
-          </div>
-          <TextField id="email" name="email" type="email" label="E-Mail-Adresse" autoComplete="email" value={v.email}
-            onChange={(e) => set('email', e.target.value)} error={err('email')} {...aria('email')} />
-          <TextField id="phone" name="phone" type="tel" label="Telefonnummer" autoComplete="tel" icon={<PhoneIcon />} value={v.phone}
-            onChange={(e) => set('phone', e.target.value)} error={err('phone')} {...aria('phone')} />
-          <div className="pt-2">
-            <p id="reachability-label" className="text-sm font-medium text-ink">Wann sind Sie gut erreichbar? (optional)</p>
-            <div role="group" aria-labelledby="reachability-label" data-field="reachability" tabIndex={-1} className="mt-2 flex flex-wrap gap-2">
-              {REACHABILITY.map((r) => (
-                <ToggleChip key={r} active={v.reachability.includes(r)}
-                  onClick={() => set('reachability', v.reachability.includes(r) ? v.reachability.filter((x) => x !== r) : [...v.reachability, r])}>
-                  {REACHABILITY_LABELS[r]} <span className="font-normal">· {REACHABILITY_HOURS[r]}</span>
-                </ToggleChip>
+      <div className={settling ? 'pointer-events-none' : undefined}>
+        {step === 1 && (
+          <div className="mt-10">
+            <div role="group" aria-labelledby="step-title" data-field="projectType" tabIndex={-1}
+              aria-describedby={err('projectType') ? 'projectType-error' : undefined} className="space-y-3">
+              {PROJECT_TYPES.map((t) => (
+                <OptionCard key={t} active={v.projectType === t} icon={PROJECT_ICONS[t]} onClick={() => chooseProject(t)}>
+                  {PROJECT_TYPE_LABELS[t]}
+                </OptionCard>
               ))}
             </div>
+            <FieldNote id="projectType" error={err('projectType')} />
           </div>
-        </div>
-      )}
+        )}
+
+        {step === 2 && (
+          <div className="mt-10 grid items-center gap-8 md:grid-cols-[11rem_1fr]">
+            <GermanyMap className="mx-auto hidden w-40 md:block" />
+            <div className="space-y-4">
+              <label className="flex min-h-11 items-center gap-3 text-base text-ink">
+                <input type="checkbox" name="addressUnknown" className="size-5 accent-ink" checked={v.addressUnknown}
+                  onChange={(e) => set('addressUnknown', e.target.checked)} />
+                Ich kenne die genaue Adresse noch nicht
+              </label>
+              {!v.addressUnknown && (
+                <>
+                  <div className="grid grid-cols-[7.5rem_1fr] gap-3">
+                    <TextField id="postalCode" name="postalCode" label="PLZ" inputMode="numeric" autoComplete="off" maxLength={5}
+                      value={v.postalCode} onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, ''))}
+                      {...aria('postalCode', plzWarning)} />
+                    {localities.length > 1 ? (
+                      <SelectField id="city" name="city" label="Ort" value={v.city} onChange={(e) => set('city', e.target.value)} {...aria('city')}>
+                        <option value="">Bitte wählen</option>
+                        {localities.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
+                      </SelectField>
+                    ) : (
+                      <TextField id="city" name="city" label="Ort" autoComplete="off" value={v.city} onChange={(e) => set('city', e.target.value)}
+                        {...aria('city')} />
+                    )}
+                  </div>
+                  <FieldNote id="postalCode" error={err('postalCode')} hint={plzWarning ?? undefined} />
+                  <FieldNote id="city" error={err('city')} />
+                  <div className="grid grid-cols-[1fr_6.5rem] gap-3">
+                    <TextField id="street" name="street" label="Straße" autoComplete="off" value={v.street} onChange={(e) => set('street', e.target.value)}
+                      error={err('street')} {...aria('street')} />
+                    <TextField id="houseNumber" name="houseNumber" label="Nr." autoComplete="off" maxLength={10} value={v.houseNumber}
+                      onChange={(e) => set('houseNumber', e.target.value)} error={err('houseNumber')} {...aria('houseNumber')} />
+                  </div>
+                  <p className="text-sm text-muted">Die Adresse des Grundstücks – nicht Ihre Wohnadresse, falls abweichend. Keine Hausnummer? Einfach leer lassen.</p>
+                </>
+              )}
+              <TextArea id="plotNote" name="plotNote" rows={3} maxLength={1000}
+                label={v.addressUnknown ? 'Wo liegt das Grundstück? (z. B. Ort, Straße, Flurstück)' : 'Weitere Angaben (optional), z. B. Flurstück'}
+                value={v.plotNote} onChange={(e) => set('plotNote', e.target.value)} error={err('plotNote')} {...aria('plotNote')} />
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="mt-10 space-y-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <TextField id="firstName" name="firstName" label="Vorname" autoComplete="given-name" value={v.firstName}
+                onChange={(e) => set('firstName', e.target.value)} error={err('firstName')} {...aria('firstName')} />
+              <TextField id="lastName" name="lastName" label="Nachname" autoComplete="family-name" value={v.lastName}
+                onChange={(e) => set('lastName', e.target.value)} error={err('lastName')} {...aria('lastName')} />
+            </div>
+            <TextField id="email" name="email" type="email" label="E-Mail-Adresse" autoComplete="email" value={v.email}
+              onChange={(e) => set('email', e.target.value)} error={err('email')} {...aria('email')} />
+            <TextField id="phone" name="phone" type="tel" label="Telefonnummer" autoComplete="tel" icon={<PhoneIcon />} value={v.phone}
+              onChange={(e) => set('phone', e.target.value)} error={err('phone')} {...aria('phone')} />
+            <div className="pt-2">
+              <p id="reachability-label" className="text-sm font-medium text-ink">Wann sind Sie gut erreichbar? (optional)</p>
+              <div role="group" aria-labelledby="reachability-label" data-field="reachability" tabIndex={-1} className="mt-2 flex flex-wrap gap-2">
+                {REACHABILITY.map((r) => (
+                  <ToggleChip key={r} active={v.reachability.includes(r)}
+                    onClick={() => set('reachability', v.reachability.includes(r) ? v.reachability.filter((x) => x !== r) : [...v.reachability, r])}>
+                    {REACHABILITY_LABELS[r]} <span className="font-normal">· {REACHABILITY_HOURS[r]}</span>
+                  </ToggleChip>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       <div aria-hidden="true" inert className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
         <label htmlFor="website">Website</label>

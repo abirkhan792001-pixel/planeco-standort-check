@@ -6,7 +6,7 @@ export const softShadow = 'shadow-[0_1px_2px_rgb(34_64_60/0.08)]';
 /** Visible keyboard focus for buttons and links on the public page. */
 export const focusRing = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
 
-/** Single-choice card with a radio-style dot (Vorhaben). A single-choice card that reports its state via aria-pressed. */
+/** Single-choice card with a radio-style dot; reports its state via aria-pressed. */
 export function OptionCard({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: ReactNode; children: ReactNode }) {
   return (
     <button type="button" aria-pressed={active} onClick={onClick}
@@ -45,14 +45,6 @@ export function Spinner() {
     <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" className="size-5 motion-safe:animate-spin">
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-export function CheckIcon() {
-  return (
-    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="size-4">
-      <path d="M5 12.5l4.5 4.5L19 7.5" />
     </svg>
   );
 }
