@@ -44,7 +44,12 @@ describe('landing page (/)', () => {
     for (const borrowed of ['DGNB', 'Google', 'Handwerk', 'Jahre Erfahrung', 'Experten']) expect(text(html)).not.toContain(borrowed);
   });
 
-  it('footer links the privacy page', () => expect(html).toMatch(/<a href="\/datenschutz"[^>]*>Datenschutzhinweise<\/a>/));
+  it('footer links the privacy page in a new tab, so a half-filled form survives', () => {
+    const link = html.match(/<a (?=[^>]*\bhref="\/datenschutz")([^>]*)>Datenschutzhinweise<\/a>/)?.[0] ?? '';
+    expect(link).not.toBe('');
+    expect(link).toContain('target="_blank"');
+    expect(link).toContain('rel="noopener"');
+  });
 });
 
 describe('motion', () => {

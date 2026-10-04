@@ -98,3 +98,29 @@ describe('LeadForm markup keeps every behaviour hook (first render, before hydra
     expect(html).toMatch(/<span aria-hidden="true"[^>]*><svg(?:(?!<span)[^])*<\/svg><\/span><input id="phone"[^>]*\btype="tel"/);
   });
 });
+
+describe('AA decisions stay applied', () => {
+  const html = render(createElement(LeadForm));
+  /** Whole-class list of the first element matching `pick`, split on whitespace (so `focus:ring-ink/25` never satisfies `focus:ring-ink`). */
+  const classesOf = (tag: RegExp): string[] => (html.match(tag)?.[1] ?? '').split(/\s+/).filter(Boolean);
+  const inactiveButtonClasses = (label: string): string[] => {
+    const hit = [...html.matchAll(/<button type="button" aria-pressed="false" class="([^"]*)">([^]*?)<\/button>/g)].find((m) => text(m[2]).includes(label));
+    return (hit?.[1] ?? '').split(/\s+/).filter(Boolean);
+  };
+
+  it('text fields show a full-strength ink focus ring and keep the outline in forced-colors mode', () => {
+    const street = classesOf(/<input id="street"[^>]*\sclass="([^"]*)"/);
+    expect(street).toContain('border-line');
+    expect(street).toContain('focus:ring-ink');
+    expect(street).toContain('focus:outline-hidden');
+    expect(street).not.toContain('outline-none');
+    expect(street).not.toContain('focus:outline-none');
+    expect(street).not.toContain('focus:ring-ink/25');
+  });
+
+  it('the first inactive Vorhaben option card keeps the AA resting border', () =>
+    expect(inactiveButtonClasses('Neubau')).toContain('border-line'));
+
+  it('the first inactive reachability chip keeps the AA resting border', () =>
+    expect(inactiveButtonClasses('vormittags')).toContain('border-line'));
+});

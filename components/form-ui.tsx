@@ -4,7 +4,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 export const softShadow = 'shadow-[0_1px_2px_rgb(34_64_60/0.08)]';
 const fieldBase =
-  'block min-h-14 w-full border border-line bg-white px-4 py-3 text-base text-ink focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/25 aria-[invalid=true]:border-red-700';
+  'block min-h-14 w-full border border-line bg-white px-4 py-3 text-base text-ink focus:border-ink focus:outline-hidden focus:ring-2 focus:ring-ink aria-[invalid=true]:border-red-700';
 /** Visible keyboard focus for buttons and links on the public page. */
 export const focusRing = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
 

@@ -58,7 +58,7 @@ export default function Home() {
       </main>
 
       <footer className="px-4 pb-10 pt-2 text-center text-sm text-muted">
-        <a href="/datenschutz" className={`inline-flex min-h-11 items-center underline underline-offset-2 hover:text-ink ${focusRing}`}>Datenschutzhinweise</a>
+        <a href="/datenschutz" target="_blank" rel="noopener" className={`inline-flex min-h-11 items-center underline underline-offset-2 hover:text-ink ${focusRing}`}>Datenschutzhinweise</a>
       </footer>
     </div>
   );
