@@ -17,3 +17,16 @@
 @theme inline {
   --font-brand: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
 }
+
+/* Site-plan illustration: the parcel outline draws itself once (the page's only animation). Needs pathLength="1". */
+@keyframes plot-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+.plot-draw {
+  stroke-dasharray: 1;
+  animation: plot-draw 1.2s ease-out 0.2s both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .plot-draw { animation: none; stroke-dasharray: none; }
+}

@@ -1,20 +1,65 @@
+import { focusRing } from '@/components/form-ui';
 import { LeadForm } from '@/components/lead-form';
+import { NEXT_STEPS } from '@/components/landing/next-steps';
+import { PlotSketch } from '@/components/landing/plot-sketch';
+import { TrustStrip } from '@/components/landing/trust-strip';
 
 export default function Home() {
   return (
-    <div className="min-h-dvh bg-stone-50">
-      <div className="bg-stone-800 px-4 py-1.5 text-center text-xs text-stone-100">
+    <div className="min-h-dvh bg-cream font-brand text-ink">
+      <div className="bg-ink px-4 py-1.5 text-center text-xs text-cream">
         Case-Study-Prototyp – keine offizielle Seite der Planeco Building GmbH
       </div>
-      <main className="mx-auto max-w-xl px-4 py-8">
-        <h1 className="text-2xl font-bold text-stone-900">Kostenloser Standort-Check für Ihr Grundstück</h1>
-        <ol className="mt-3 space-y-1 text-stone-700">
-          <li>1. Grundstück und Kontaktdaten eintragen</li>
-          <li>2. Wir prüfen Lage und Genehmigungssituation</li>
-          <li>3. Wir rufen Sie zurück – in der Regel am nächsten Werktag</li>
-        </ol>
-        <div className="mt-8"><LeadForm /></div>
+
+      <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-5 sm:px-6">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl font-semibold tracking-wide">planeco</span>
+          <span aria-hidden="true" className="h-5 w-px bg-ink/20" />
+          <span className="text-sm text-muted">Standort-Check</span>
+        </div>
+        <a href="#formular"
+          className={`hidden min-h-11 items-center rounded-full border-2 border-terracotta-deep px-5 text-sm font-semibold text-terracotta-deep transition-colors hover:bg-terracotta-deep hover:text-white sm:inline-flex ${focusRing}`}>
+          Kostenlos anfragen
+        </a>
+      </header>
+
+      <main>
+        <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-12 pt-4 sm:px-6 md:pt-10 lg:grid-cols-12 lg:pb-20">
+          <div className="lg:col-span-7">
+            <h1 className="text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl">
+              Kostenloser Standort-Check für Ihr <span className="text-terracotta-deep">Grundstück.</span>
+            </h1>
+            <p className="mt-5 max-w-xl text-lg">Wir prüfen Lage und Genehmigungssituation Ihres Grundstücks – kostenlos und unverbindlich.</p>
+            <ol className="mt-8 grid gap-4 md:grid-cols-3">
+              {NEXT_STEPS.map((step, i) => (
+                <li key={step} className="flex items-start gap-3 text-sm md:flex-col">
+                  <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-sm font-semibold text-cream">{i + 1}</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+            <a href="#formular"
+              className={`mt-10 hidden min-h-14 items-center gap-3 rounded-full bg-terracotta-deep px-8 text-lg font-semibold text-white shadow-[0_8px_24px_-12px_rgb(176_90_55/0.7)] transition hover:brightness-90 md:inline-flex ${focusRing}`}>
+              Jetzt Standort prüfen <span aria-hidden="true">→</span>
+            </a>
+          </div>
+          <div className="hidden lg:col-span-5 lg:block">
+            <PlotSketch className="mx-auto w-full max-w-md" />
+          </div>
+        </section>
+
+        <section id="formular" aria-label="Anfrage" className="scroll-mt-6 px-4 pb-16 sm:px-6">
+          <div className="mx-auto max-w-2xl">
+            <LeadForm />
+          </div>
+        </section>
+
+        <TrustStrip />
       </main>
+
+      <footer className="px-4 pb-10 pt-2 text-center text-sm text-muted">
+        <a href="/datenschutz" className="underline underline-offset-2 hover:text-ink">Datenschutzhinweise</a>
+      </footer>
     </div>
   );
 }
