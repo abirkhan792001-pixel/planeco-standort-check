@@ -8,6 +8,10 @@ export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
 export const REACHABILITY_LABELS: Record<Reachability, string> = {
   vormittags: 'vormittags', nachmittags: 'nachmittags', abends: 'abends',
 };
+/** Time range shown next to each reachability option on the public form (display only; the stored value is unchanged). */
+export const REACHABILITY_HOURS: Record<Reachability, string> = {
+  vormittags: '8–12 Uhr', nachmittags: '12–17 Uhr', abends: '17–20 Uhr',
+};
 export const STATUS_LABELS: Record<LeadStatus, string> = {
   neu: 'Neu', in_bearbeitung: 'In Bearbeitung', qualifiziert: 'Qualifiziert',
   nicht_qualifiziert: 'Nicht qualifiziert', gewonnen: 'Gewonnen', verloren: 'Verloren',
