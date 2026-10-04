@@ -98,7 +98,7 @@ export function PhoneIcon() {
 const fieldBox =
   'peer block w-full border border-line bg-white px-4 text-base text-ink focus:border-ink focus:outline-hidden focus:ring-2 focus:ring-ink aria-[invalid=true]:border-red-700';
 const labelBase = 'pointer-events-none absolute truncate text-muted transition-all motion-reduce:transition-none';
-const floatingLabel = `${labelBase} right-4 top-1/2 -translate-y-1/2 text-base peer-focus:top-2.5 peer-focus:translate-y-0 peer-focus:text-xs peer-[:not(:placeholder-shown)]:top-2.5 peer-[:not(:placeholder-shown)]:translate-y-0 peer-[:not(:placeholder-shown)]:text-xs`;
+const floatingLabel = `${labelBase} right-4 top-1/2 -translate-y-1/2 text-base peer-focus:top-2.5 peer-focus:translate-y-0 peer-focus:text-xs peer-[:not(:placeholder-shown)]:top-2.5 peer-[:not(:placeholder-shown)]:translate-y-0 peer-[:not(:placeholder-shown)]:text-xs peer-autofill:top-2.5 peer-autofill:translate-y-0 peer-autofill:text-xs`;
 
 type FieldBase = { id: string; label: string; error?: string; hint?: string; className?: string };
 
@@ -147,7 +147,7 @@ export function TextArea({ id, label, error, hint, className = '', ...area }:
     <div className={className}>
       <div className={`relative rounded-md ${softShadow}`}>
         <textarea id={id} placeholder=" " {...area} className={`${fieldBox} min-h-28 rounded-md pb-3 pt-7`} />
-        <label htmlFor={id} className={`${labelBase} left-4 right-4 top-4 text-base peer-focus:top-2.5 peer-focus:text-xs peer-[:not(:placeholder-shown)]:top-2.5 peer-[:not(:placeholder-shown)]:text-xs`}>{label}</label>
+        <label htmlFor={id} className={`${labelBase} left-px right-px top-px rounded-t-md bg-white px-[15px] pb-1 pt-2.5 text-xs`}>{label}</label>
       </div>
       <FieldNote id={id} error={error} hint={hint} />
     </div>

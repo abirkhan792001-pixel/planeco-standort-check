@@ -43,6 +43,23 @@ describe('floating-label fields (label inside the field, still a real <label>)',
     const html = render(createElement(SelectField, { id: 'city', name: 'city', label: 'Ort', value: '', onChange: () => {}, children: createElement('option', { value: '' }, 'Bitte wählen') }));
     expect(html).toMatch(/<select id="city" name="city"[^>]*><option value=""[^>]*>Bitte wählen<\/option><\/select><label for="city" class="[^"]*\btext-xs\b/);
   });
+
+  it('TextField label also floats for browser autofill', () => {
+    const html = render(createElement(TextField, { id: 'email', name: 'email', label: 'E-Mail', type: 'email', value: '', onChange: () => {} }));
+    const labelMatch = html.match(/<label[^>]*class="([^"]*)"/);
+    expect(labelMatch).toBeTruthy();
+    expect(labelMatch![1]).toContain('peer-autofill:top-2.5');
+    expect(labelMatch![1]).toContain('peer-autofill:text-xs');
+  });
+
+  it('TextArea label stays raised on a white band so scrolled text never shows through', () => {
+    const html = render(createElement(TextArea, { id: 'notes', name: 'notes', label: 'Notizen', value: '', onChange: () => {} }));
+    const labelMatch = html.match(/<label[^>]*class="([^"]*)"/);
+    expect(labelMatch).toBeTruthy();
+    expect(labelMatch![1]).toContain('bg-white');
+    expect(labelMatch![1]).toContain('text-xs');
+    expect(labelMatch![1]).not.toMatch(/peer-focus:/);
+  });
 });
 
 describe('GermanyMap', () => {
