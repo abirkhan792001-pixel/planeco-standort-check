@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ADDRESS_TEXT, AREA_TEXT, geoFlagTexts, mailStatusLabel } from '@/lib/labels';
+import { ADDRESS_TEXT, AREA_TEXT, DEVICE_LABELS, geoFlagTexts, mailStatusLabel } from '@/lib/labels';
 import { makeLeadRow } from '../fixtures/lead-row';
 
 describe('mailStatusLabel (spec §20, E-2)', () => {
@@ -55,4 +55,8 @@ describe('ADDRESS_TEXT / AREA_TEXT (single source for badges and export)', () =>
       failed: 'Prüfung fehlgeschlagen', 'n/a': '—',
     });
   });
+});
+
+describe('DEVICE_LABELS', () => {
+  it('device type in German', () => expect(DEVICE_LABELS).toEqual({ mobile: 'Mobil', tablet: 'Tablet', desktop: 'Desktop', unknown: 'Unbekannt' }));
 });

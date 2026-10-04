@@ -121,6 +121,18 @@ describe('buildLeadsWorkbook', () => {
     expect(row.getCell(col('Längengrad')).type).toBe(ExcelJS.ValueType.Number);
   });
 
+  it('writes the device type in German (Gerät)', async () => {
+    const views = deriveLeadViews([
+      makeLeadRow({ id: '00000000-0000-4000-8000-000000000001', device_type: 'mobile' }),
+      makeLeadRow({ id: '00000000-0000-4000-8000-000000000002', device_type: 'tablet' }),
+      makeLeadRow({ id: '00000000-0000-4000-8000-000000000003', device_type: 'desktop' }),
+      makeLeadRow({ id: '00000000-0000-4000-8000-000000000004', device_type: 'unknown' }),
+      makeLeadRow({ id: '00000000-0000-4000-8000-000000000005', device_type: null }),
+    ], [], 'x');
+    const ws = await readBack(await buildLeadsWorkbook(views));
+    expect([2, 3, 4, 5, 6].map((i) => ws.getRow(i).getCell(col('Gerät')).value)).toEqual(['Mobil', 'Tablet', 'Desktop', 'Unbekannt', null]);
+  });
+
   it('uses the badge wording for the area verdict (shared labels)', async () => {
     const views = deriveLeadViews([
       makeLeadRow({ id: '00000000-0000-4000-8000-000000000001', enrichment_status: 'done', geo_precision: 'none' }), // no coordinates -> unclear

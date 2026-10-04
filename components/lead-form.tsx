@@ -6,6 +6,7 @@ import type { RawAttribution } from '@/lib/attribution/types';
 import { fieldErrors, leadPayloadSchema } from '@/lib/leads/schema';
 import { PROJECT_TYPES, REACHABILITY, type ProjectType, type Reachability } from '@/lib/leads/types';
 import { PROJECT_TYPE_LABELS, REACHABILITY_LABELS } from '@/lib/labels';
+import { isReservedEmailDomain } from '@/lib/config/app';
 
 type Locality = { name: string };
 type Values = {
@@ -161,7 +162,12 @@ export function LeadForm() {
     return (
       <div role="status" className="rounded-2xl bg-emerald-50 p-6 text-stone-900">
         <h2 ref={successRef} tabIndex={-1} className="text-xl font-semibold outline-none">Vielen Dank, {v.firstName}!</h2>
-        <p className="mt-2">Wir haben Ihre Anfrage erhalten. Wir senden Ihnen eine Bestätigung an <strong>{v.email}</strong>. Falls sie nicht ankommt, schauen Sie bitte auch im Spam-Ordner nach.</p>
+        <p className="mt-2">
+          Wir haben Ihre Anfrage erhalten.{' '}
+          {isReservedEmailDomain(v.email)
+            ? 'Testadresse erkannt – es wird keine Bestätigungs-E-Mail versendet.'
+            : <>Wir senden Ihnen eine Bestätigung an <strong>{v.email}</strong>. Falls sie nicht ankommt, schauen Sie bitte auch im Spam-Ordner nach.</>}
+        </p>
         <p className="mt-2">Unser Team prüft Ihren Standort und meldet sich in der Regel am nächsten Werktag telefonisch bei Ihnen.</p>
       </div>
     );

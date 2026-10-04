@@ -1,5 +1,6 @@
 import 'server-only';
 import type { LeadPayload } from '@/lib/leads/schema';
+import { errInfo } from '@/lib/log';
 import { sendTransactional } from './brevo';
 
 /** Used only when the DB insert fails: the lead goes to a human inbox as plain text (no HTML → no injection). */
@@ -15,7 +16,7 @@ export async function sendFallbackMail(p: LeadPayload): Promise<boolean> {
     });
     return true;
   } catch (err) {
-    console.error('fallback mail failed', err);
+    console.error('fallback mail failed', errInfo(err));
     return false;
   }
 }

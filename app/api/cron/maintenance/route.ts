@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logEvent } from '@/lib/leads/events';
+import { errInfo } from '@/lib/log';
 import { processConfirmation, processEnrichment } from '@/lib/leads/side-effects';
 import { MAX_EMAIL_ATTEMPTS, MAX_ENRICHMENT_ATTEMPTS } from '@/lib/config/app';
 import {
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 function logQueryError(what: string, error: { code?: string; message: string }) {
-  console.error(what, { code: error.code, message: error.message }); // codes/messages only, no lead data
+  console.error(what, errInfo(error)); // codes/messages only, no lead data
 }
 
 export async function GET(req: Request) {
@@ -53,7 +54,7 @@ export async function GET(req: Request) {
   for (const { id } of mails ?? []) {
     if (!hasTimeBudget(startedAt, Date.now())) break; // the rest is picked up by the next run
     emailsRetried++;
-    await processConfirmation(db, id as string, now).catch((e) => { errors++; console.error('retry mail', id, e); });
+    await processConfirmation(db, id as string, now).catch((e) => { errors++; console.error('retry mail', id, errInfo(e)); });
   }
 
   // 4) Retry enrichment (sequential; the Nominatim client spaces requests itself). The slowest job: it also needs headroom.
@@ -64,7 +65,7 @@ export async function GET(req: Request) {
   for (const { id } of geos ?? []) {
     if (!canStartEnrichment(startedAt, Date.now())) break;
     enrichmentsRetried++;
-    await processEnrichment(db, id as string, now).catch((e) => { errors++; console.error('retry enrichment', id, e); });
+    await processEnrichment(db, id as string, now).catch((e) => { errors++; console.error('retry enrichment', id, errInfo(e)); });
   }
 
   const summary = buildSummary({ leads: count, emailsRetried, enrichmentsRetried, expired: expiredIds.length, errors });

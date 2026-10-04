@@ -11,7 +11,7 @@ export default function Datenschutz() {
       <h2 className="mt-6 text-lg font-semibold">Verantwortlich</h2>
       <p>Abir Khan (Case-Study-Prototyp){contact ? <> · Kontakt: <a href={`mailto:${contact}`}>{contact}</a></> : null}</p>
       <h2 className="mt-6 text-lg font-semibold">Zweck und Rechtsgrundlage</h2>
-      <p>Wir verarbeiten Ihre Angaben (Name, Kontaktdaten, Adresse des Grundstücks, optionale Angaben) ausschließlich, um Ihre Anfrage zum Standort-Check zu bearbeiten und Sie zu kontaktieren (Art. 6 Abs. 1 lit. b DSGVO). Zur Auswertung unserer Kampagnen speichern wir die Kampagnenparameter der aufgerufenen Adresse (z. B. utm_source) sowie den Gerätetyp; es werden keine Cookies gesetzt und keine Tracking-Pixel verwendet.</p>
+      <p>Wir verarbeiten Ihre Angaben (Name, Kontaktdaten, Adresse des Grundstücks, optionale Angaben) ausschließlich, um Ihre Anfrage zum Standort-Check zu bearbeiten und Sie zu kontaktieren (Art. 6 Abs. 1 lit. b DSGVO). Zur Auswertung unserer Kampagnen speichern wir Kampagnenparameter (z. B. utm_source), Klick-IDs von Werbeplattformen (z. B. gclid, fbclid), die verweisende Seite (Referrer) und die Einstiegsseite sowie den Gerätetyp; es werden keine Cookies gesetzt und keine Tracking-Pixel verwendet.</p>
       <h2 className="mt-6 text-lg font-semibold">Empfänger</h2>
       <ul>
         <li>Vercel Inc. (Hosting)</li>

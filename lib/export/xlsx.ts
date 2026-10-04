@@ -1,7 +1,9 @@
 import ExcelJS from 'exceljs';
 import type { LeadView } from '@/lib/leads/derive';
 import { formatBerlin } from '@/lib/format';
-import { ADDRESS_TEXT, AREA_TEXT, geoFlagTexts, mailStatusLabel, PROJECT_TYPE_LABELS, REASON_LABELS, STATE_LABELS, STATUS_LABELS } from '@/lib/labels';
+import {
+  ADDRESS_TEXT, AREA_TEXT, DEVICE_LABELS, geoFlagTexts, mailStatusLabel, PROJECT_TYPE_LABELS, REASON_LABELS, STATE_LABELS, STATUS_LABELS,
+} from '@/lib/labels';
 
 /** `null` (or an empty string) leaves the cell truly blank, so Excel's filters and COUNTBLANK treat it as missing. */
 type Column = { header: string; width: number; value: (r: LeadView) => string | number | null };
@@ -47,7 +49,7 @@ export const EXPORT_COLUMNS: Column[] = [
   { header: 'affiliate', width: 12, value: (r) => r.affiliate },
   { header: 'referrer', width: 28, value: (r) => r.referrer },
   { header: 'landing_path', width: 22, value: (r) => r.landing_path },
-  { header: 'Gerät', width: 9, value: (r) => r.device_type },
+  { header: 'Gerät', width: 10, value: (r) => (r.device_type ? DEVICE_LABELS[r.device_type] : null) },
   { header: 'Status', width: 16, value: (r) => STATUS_LABELS[r.status] },
   { header: 'Grund', width: 16, value: (r) => (r.disqualify_reason ? REASON_LABELS[r.disqualify_reason] : null) },
   { header: 'Bearbeiter', width: 12, value: (r) => r.ownerName },

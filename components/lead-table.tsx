@@ -6,7 +6,7 @@ import { applyFilters, DEFAULT_FILTERS, filtersToSearchParams, nextSort, sortRow
 import type { LeadView } from '@/lib/leads/derive';
 import { CHANNEL_GROUPS, type ChannelGroup } from '@/lib/attribution/types';
 import { DISQUALIFY_REASONS, LEAD_STATUSES, type DisqualifyReason, type LeadStatus } from '@/lib/leads/types';
-import { GEO_FLAG_LABELS, geoFlagTexts, mailStatusLabel, PROJECT_TYPE_LABELS, REACHABILITY_LABELS, REASON_LABELS, STATE_LABELS, STATUS_LABELS } from '@/lib/labels';
+import { DEVICE_LABELS, GEO_FLAG_LABELS, geoFlagTexts, mailStatusLabel, PROJECT_TYPE_LABELS, REACHABILITY_LABELS, REASON_LABELS, STATE_LABELS, STATUS_LABELS } from '@/lib/labels';
 import { formatBerlin } from '@/lib/format';
 import { claimLeadAction, releaseLeadAction, setNoteAction, setStatusAction, type ActionResult } from '@/app/dashboard/actions';
 import { AddressBadge, AreaBadge, MailBadge, StatusBadge } from './badges';
@@ -198,7 +198,7 @@ function FragmentRow(props: {
           <td colSpan={COLUMN_COUNT} className="space-y-3 px-4 py-3">
             <div className="grid gap-2 text-xs text-stone-600 md:grid-cols-3">
               <div>Angaben: {l.plot_note || '—'}</div>
-              <div>Quelle: {[l.utm_source, l.utm_medium, l.utm_campaign].filter(Boolean).join(' / ') || '—'}{l.gclid ? ' · gclid' : ''}{l.fbclid ? ' · fbclid' : ''} · {l.device_type}</div>
+              <div>Quelle: {[l.utm_source, l.utm_medium, l.utm_campaign].filter(Boolean).join(' / ') || '—'}{l.gclid ? ' · gclid' : ''}{l.fbclid ? ' · fbclid' : ''} · {l.device_type ? DEVICE_LABELS[l.device_type] : '—'}</div>
               <div>Gemeinde: {l.geo_municipality ?? '—'} {l.geo_municipality_key ? `(AGS ${l.geo_municipality_key})` : ''}</div>
               {flags.length > 0 && <div className="font-medium text-amber-800 md:col-span-3">Adress-Hinweise: {flags.join(' · ')}</div>}
               {mailHint && <div className="md:col-span-3">Mail-Hinweis: {mailHint}</div>}

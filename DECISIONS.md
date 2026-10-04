@@ -41,6 +41,9 @@ The top five are in NOTES ("Open"). Further:
 - **Attribution:** YouTube/Pinterest referrers count as "Referral".
 - **Nominatim/OSM:** coverage gaps (the case's "Am Mühlenteich" is in neither OSM nor OpenPLZ); the free-text "Adresse unbekannt" note is sent to Nominatim as typed. A "Flurstück …" resolves to the town at best.
 - **Dedupe gaps:** a house number typed into the street field gives a different address key; near-simultaneous duplicates (S8).
+- **Phone extension heuristic:** "04101-1234" (5-digit area code + 4-digit number, one hyphen) is read as number + extension; the remaining "04101" is too short, so the lead gets no E.164 number (flagged invalid; the raw input stays visible to Sales) and phone-based duplicate matching misses it.
+- **Claim-time metric:** a re-claim or forced claim resets `assigned_at`, so "Ø Std. bis Übernahme" runs to the latest claim, not the first, and can overstate the time to first pickup; a released lead drops out of the average.
+- **Test and real leads are kept apart in duplicate detection (decision):** a test lead (`?test=1` or a reserved email domain) is never linked to a real lead or vice versa, so a reviewer's test cannot inherit a real customer's owner or hide as that customer's duplicate. Cost: someone who first submitted with `?test=1` starts a fresh group when they return for real.
 - **Rare double mail:** if the status write fails after Brevo accepted a mail, the claim expires after 10 min and the retry sends again.
 - **Test gaps:** no automated tests for the DB-down fallback or the report page rendering. The form needs JavaScript to submit.
 
@@ -54,6 +57,7 @@ The top five are in NOTES ("Open"). Further:
 - **Form:** a browser test found focus jumping to the wrong field and, by clicking submit before hydration, a native GET that would put personal data into the URL → button disabled until hydrated, `method=post`. Review added: the success text promised a mail that is not always sent; a stale city after a PLZ change.
 - **Mail step:** the plan had no claim, so the post-response job and the cron could double-send; the first fix (optimistic attempts lock) still left a window, caught by a scoped re-review → `sending` state with a lease, tested live. Also: a bad Brevo key (401) would have marked every lead's mail permanently "rejected".
 - **Channel rule vs README:** the README said sample #3 (`utm_source=google`, `utm_medium=cpc`) shows as Google Ads, but the spec-literal rule classified it as "Paid – google" (Paid Other). Caught by the docs review cross-checking claims against code → google/bing + paid medium = Paid Search (see Assumptions).
+- Final whole-project review found a third-submission gap in duplicate detection (earliest root closed → new open root beside an open one) that per-task reviews missed; fixed and tested.
 
 ### Test pitfalls
 - A curl test from Git Bash on Windows sent cp1252, not UTF-8, and stored "Osterstra�e" with a `201`. Noticed by reading the DB row. Browsers always send UTF-8; the seed script uses Node `fetch`.

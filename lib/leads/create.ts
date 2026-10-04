@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { MIN_FILL_MS, PRIVACY_NOTICE_VERSION, isReservedEmailDomain } from '@/lib/config/app';
 import { ATTRIBUTION_KEYS } from '@/lib/attribution/types';
+import { errInfo } from '@/lib/log';
 import { buildAddressKey, normalizeEmail, normalizePhone } from './normalize';
 import { decideDuplicate, findMatches, NO_DUPLICATE, type DedupeKeys, type DuplicateDecision } from './dedupe';
 import { fieldErrors, leadPayloadSchema, type LeadPayload } from './schema';
@@ -39,6 +40,11 @@ export function isDataError(err: unknown): boolean {
   return typeof code === 'string' && (code.startsWith('22') || code.startsWith('23'));
 }
 
+/** `?test=1` or a reserved email domain. One rule for the stored flag and for duplicate matching. */
+export function isTestLead(p: Pick<LeadPayload, 'isTest' | 'email'>): boolean {
+  return p.isTest || isReservedEmailDomain(p.email);
+}
+
 export function dedupeKeysFromPayload(p: LeadPayload): DedupeKeys {
   return {
     email_normalized: normalizeEmail(p.email),
@@ -58,7 +64,7 @@ export function buildLeadInsert(
   );
   const base = {
     idempotency_key: p.idempotencyKey,
-    is_test: p.isTest || isReservedEmailDomain(p.email),
+    is_test: isTestLead(p),
     first_name: p.firstName,
     last_name: p.lastName,
     email: p.email,
@@ -116,7 +122,7 @@ export async function createLead(body: unknown, ctx: CreateLeadContext): Promise
     if (existing.data) return { kind: 'replay', id: existing.data.id as string };
 
     const keys = dedupeKeysFromPayload(p);
-    const decision = spam ? NO_DUPLICATE : decideDuplicate(keys, await findMatches(db, keys), ctx.now);
+    const decision = spam ? NO_DUPLICATE : decideDuplicate(keys, await findMatches(db, keys, isTestLead(p)), ctx.now);
     const row = buildLeadInsert(p, { now: ctx.now, userAgent: ctx.userAgent, spam, decision });
 
     const inserted = await db.from('leads').insert(row).select('id').single();
@@ -130,8 +136,7 @@ export async function createLead(body: unknown, ctx: CreateLeadContext): Promise
     return { kind: 'created', id: inserted.data.id as string, runSideEffects: !spam };
   } catch (err) {
     // Log code + message only: Postgres `details` can contain the failing row (PII).
-    const e = err as { code?: unknown; message?: unknown } | null;
-    console.error('createLead: database failure', { code: e?.code, message: e?.message });
+    console.error('createLead: database failure', errInfo(err));
     if (isDataError(err)) {
       return { kind: 'invalid', errors: { form: 'Ihre Angaben konnten nicht gespeichert werden. Bitte prüfen Sie Ihre Eingaben.' } };
     }

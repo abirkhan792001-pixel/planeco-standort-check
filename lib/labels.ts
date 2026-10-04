@@ -1,6 +1,6 @@
 import type { AreaVerdict } from '@/lib/geo/service-area';
 import type { AddressQuality } from '@/lib/leads/derive';
-import type { DisqualifyReason, LeadRow, LeadStatus, ProjectType, Reachability } from '@/lib/leads/types';
+import type { DeviceType, DisqualifyReason, LeadRow, LeadStatus, ProjectType, Reachability } from '@/lib/leads/types';
 
 export const PROJECT_TYPE_LABELS: Record<ProjectType, string> = {
   neubau: 'Neubau', anbau: 'Anbau', umbau: 'Umbau', sanierung: 'Sanierung', sonstiges: 'Sonstiges',
@@ -15,6 +15,9 @@ export const STATUS_LABELS: Record<LeadStatus, string> = {
 export const REASON_LABELS: Record<DisqualifyReason, string> = {
   ausserhalb_gebiet: 'Außerhalb Gebiet', kein_bedarf: 'Kein Bedarf', nicht_erreichbar: 'Nicht erreichbar',
   spam: 'Spam/Test', duplikat: 'Duplikat', sonstiges: 'Sonstiges',
+};
+export const DEVICE_LABELS: Record<DeviceType, string> = {
+  mobile: 'Mobil', tablet: 'Tablet', desktop: 'Desktop', unknown: 'Unbekannt',
 };
 export const STATE_LABELS: Record<string, string> = {
   'DE-SH': 'Schleswig-Holstein', 'DE-HH': 'Hamburg', 'DE-NI': 'Niedersachsen', 'DE-HB': 'Bremen', 'DE-NW': 'Nordrhein-Westfalen',

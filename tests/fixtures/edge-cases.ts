@@ -18,12 +18,12 @@ export const payload = (o: Record<string, unknown> = {}): Record<string, unknown
 // In-memory stand-in for the Supabase client: only what createLead/findMatches use.
 // ---------------------------------------------------------------------------------------------------------------------
 
-export type SeedRow = MatchRow & { idempotency_key: string; first_name: string; last_name: string; spam_suspected: boolean };
+export type SeedRow = MatchRow & { idempotency_key: string; first_name: string; last_name: string; spam_suspected: boolean; is_test: boolean };
 export const ROOT_ID = '11111111-1111-4111-8111-111111111111';
 
 export const seedRow = (o: Partial<SeedRow> = {}): SeedRow => ({
   id: ROOT_ID, created_at: daysBefore(1), idempotency_key: uuid(900), duplicate_of: null, status: 'neu', assigned_to: null,
-  first_name: 'Thomas', last_name: 'Ahrens', email_normalized: 'root@gmx.de', phone_e164: null, address_key: null, spam_suspected: false,
+  first_name: 'Thomas', last_name: 'Ahrens', email_normalized: 'root@gmx.de', phone_e164: null, address_key: null, spam_suspected: false, is_test: false,
   ...o,
 });
 

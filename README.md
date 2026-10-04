@@ -36,7 +36,7 @@ Sales ─login─▶ /dashboard (reads under RLS; writes only via Postgres funct
 Vercel cron 04:00 UTC ─▶ /api/cron/maintenance (keep-alive query, mail + enrichment retries, close mails older than 24 h)
 GitHub Actions daily ─▶ /api/health (liveness + backlog counts, no lead data)
 ```
-If the database is unreachable at submit, the lead is mailed to a fallback inbox and the user still sees success (`202`).
+If the database is unreachable at submit, the lead is mailed to a fallback inbox and the user still sees success (`202`); otherwise `503` with an honest error message (and a phone number if `NEXT_PUBLIC_CONTACT_PHONE` is configured).
 
 Key decisions (summary in [NOTES.md](NOTES.md), details in [DECISIONS.md](DECISIONS.md)):
 - Save first, side effects later (each with a status column, attempt cap and daily retry).
@@ -83,10 +83,10 @@ See `.env.example`.
   - `email/` (Brevo, confirmation rules, MX check, fallback), `dashboard/` (filters, paged loading), `export/xlsx.ts`, `report.ts`, `maintenance/`, `labels.ts`
 - `supabase/migrations/` — schema, functions (`claim_lead`, `release_lead`, `set_lead_status`, `set_lead_note`), RLS, `0004`/`0005` additions.
 - `scripts/seed-samples.mjs` — the five case samples.
-- `tests/` — Vitest, 360 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
+- `tests/` — Vitest, 382 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
 
 ## Tested on
-Automated: `npm test` (360 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
+Automated: `npm test` (382 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
 
 Verified against production / the live database:
 - **Case samples (production, seeded via the real API):** all five stored and enriched as listed above — #1 house-level, PLZ mismatch (found 01097), Sachsen; #2 `address_unknown` + `ambiguous`, no coordinates; #3 street-level, PLZ mismatch (found 20255), DE-HH; #4 linked to #1 as duplicate (phone + address); #5 postcode-level, DE-SH, ~55 km from Hamburg. Test addresses were not mailed (`test_domain`). Re-running the seed replays (HTTP 200) and creates no new rows.
@@ -94,7 +94,7 @@ Verified against production / the live database:
 - **Mail claim:** two concurrent mail claims → exactly one sends; a claim stuck in `sending` for more than 10 minutes is retried.
 - **Access (C-7):** RPC calls without a session are denied (401 / `42501`); `/dashboard` redirects to `/login` when logged out; the export is POST-only (GET → 405) and checks the session itself.
 - **Confirmation mail:** delivered locally and in production; the throttle (one per address per 24 h) and the test-domain skip work; a production send that failed was retried and delivered by the daily job.
-- **Operations (O-1):** the production cron answers 401 without the secret and runs with it (its first step is the keep-alive query). The GitHub Actions ping is configured. The DB-down fallback (fallback inbox → `202`, otherwise `503` with a phone number) is implemented but has not been exercised against a paused project.
+- **Operations (O-1):** the production cron answers 401 without the secret and runs with it (its first step is the keep-alive query). The GitHub Actions ping is configured. The DB-down fallback (fallback inbox → `202`, otherwise `503` with an honest error message (and a phone number if `NEXT_PUBLIC_CONTACT_PHONE` is configured)) is implemented but has not been exercised against a paused project.
 - **Config:** Supabase public sign-up was found **enabled** despite the setup steps; it is now off (checked in the Supabase dashboard).
 
 ### Manual checks (to be completed before submission)

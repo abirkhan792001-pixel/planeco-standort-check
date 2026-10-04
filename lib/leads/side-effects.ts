@@ -9,6 +9,7 @@ import { enrichmentErrorCode } from '@/lib/enrichment/errors';
 import { evaluateGeocode } from '@/lib/enrichment/evaluate';
 import { searchFreeText, searchPostalCodeCentroid, searchStructured } from '@/lib/enrichment/nominatim';
 import { lookupPostalCode } from '@/lib/enrichment/openplz';
+import { errInfo } from '@/lib/log';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { logEvent } from './events';
 import type { LeadRow } from './types';
@@ -20,12 +21,7 @@ async function loadLead(db: SupabaseClient, id: string): Promise<LeadRow> {
 }
 
 function logDbError(what: string, id: string, error: { code?: string; message: string }) {
-  console.error(what, id, { code: error.code, message: error.message });
-}
-
-function errInfo(err: unknown) {
-  const e = err as { code?: string; message?: string } | null;
-  return { code: e?.code, message: e?.message ?? String(err) };
+  console.error(what, id, errInfo(error));
 }
 
 export async function processConfirmation(db: SupabaseClient, id: string, now: Date): Promise<void> {
