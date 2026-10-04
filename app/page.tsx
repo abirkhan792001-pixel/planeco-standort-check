@@ -1,5 +1,6 @@
 import { focusRing } from '@/components/form-ui';
 import { LeadForm } from '@/components/lead-form';
+import { LogoBadge, PlanecoMark, TrustBadges } from '@/components/landing/brand';
 import { NEXT_STEPS } from '@/components/landing/next-steps';
 import { PlotSketch } from '@/components/landing/plot-sketch';
 import { TrustStrip } from '@/components/landing/trust-strip';
@@ -13,7 +14,10 @@ export default function Home() {
 
       <header className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-5 sm:px-6">
         <div className="flex items-center gap-3">
-          <span className="text-2xl font-semibold tracking-wide">planeco</span>
+          <span className="flex items-center gap-2">
+            <PlanecoMark className="h-9 w-auto" />
+            <span className="text-2xl font-semibold tracking-wide">planeco</span>
+          </span>
           <span aria-hidden="true" className="h-5 w-px bg-ink/20" />
           <span className="text-sm text-muted">Standort-Check</span>
         </div>
@@ -50,7 +54,9 @@ export default function Home() {
 
         <section id="formular" aria-label="Anfrage" className="scroll-mt-6 px-4 pb-16 sm:px-6">
           <div className="mx-auto max-w-2xl">
+            <LogoBadge />
             <LeadForm />
+            <TrustBadges />
           </div>
         </section>
 

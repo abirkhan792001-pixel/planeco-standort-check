@@ -10,6 +10,7 @@ Built with Claude Code from a spec and plan I worked out with it; every task got
 3. **Store facts, derive verdicts.** Raw UTMs and geodata are stored; channel and service area are computed at read time, so a config change re-evaluates history.
 4. **One owner per lead, enforced by the database.** Claiming locks the root row; duplicates (same email, phone or plot within 90 days, never the name alone) inherit the owner. Personal logins show who works what.
 5. **Evidence, not dots.** Sales sees "Randlage · Hamburg 55 km · Nur PLZ-genau"; a geocoder hit counts only after it is checked against the typed street.
+6. **Looks like Planeco, marked as a prototype.** The public page uses Planeco's palette, P logo, the Google-rating / DGNB / Das-Handwerk badges and Planeco's "+ 10 Experten vor Ort" / "+ 15 Jahre Erfahrung", taken from planeco's live site, so the funnel can be judged as it would run. The callback item says "Rückruf am nächsten Werktag" instead of Planeco's "< 24 h", because that is what this form promises. The banner marks the page as unofficial and it is not indexed. Where Planeco's colours fail WCAG AA, a slightly darker terracotta (#A9563A) and thin field borders are used.
 
 ## Assumptions
 - **Service area** (open question for Planeco, see NOTES): metro hubs where Planeco publishes city pages (Hamburg, Berlin, München, Köln, Frankfurt, Düsseldorf, Stuttgart), 50 km + 15 km edge band. One config file, `lib/config/service-area.ts`.

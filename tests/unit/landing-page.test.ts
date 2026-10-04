@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -8,6 +8,10 @@ import { NEXT_STEPS } from '@/components/landing/next-steps';
 
 const html = renderToStaticMarkup(createElement(Home));
 const text = (s: string) => s.replace(/<[^>]+>/g, '');
+
+/** Every <img …> tag whose src is exactly `src`. Attribute order does not matter. */
+const imgTags = (src: string) => (html.match(/<img[^>]*>/g) ?? []).filter((t) => t.includes(` src="${src}"`));
+const imgTag = (src: string) => imgTags(src)[0] ?? '';
 
 describe('landing page (/)', () => {
   it('keeps the prototype banner', () =>
@@ -37,11 +41,29 @@ describe('landing page (/)', () => {
 
   it('renders the form', () => expect(html).toContain('name="postalCode"'));
 
-  it('trust strip makes only claims the prototype keeps', () => {
-    for (const claim of ['Kostenlos & unverbindlich', 'Rückruf meist am nächsten Werktag', 'Prüfung von Lage & Genehmigung']) {
-      expect(text(html).replace(/&amp;/g, '&')).toContain(claim);
+  it('shows the Planeco mark twice (header and above the form), decorative', () => {
+    const tags = imgTags('/brand/planeco-mark.png');
+    expect(tags).toHaveLength(2);
+    for (const tag of tags) expect(tag).toContain('alt=""');
+    expect(text(html)).toContain('planeco');
+  });
+
+  it('shows the Google, DGNB and Handwerk badges with German alt texts', () => {
+    expect(imgTag('/brand/google-rating.png')).toContain('alt="Google-Bewertungen: 5 Sterne"');
+    expect(imgTag('/brand/dgnb.png')).toContain('alt="Mitglied der DGNB"');
+    expect(imgTag('/brand/das-handwerk.png')).toContain('alt="Das Handwerk – Die Wirtschaftsmacht von nebenan"');
+  });
+
+  it('bottom panel shows Planeco\'s claims, consistent with the next-working-day promise', () => {
+    for (const claim of ['+ 10 Experten vor Ort', 'Rückruf am nächsten Werktag', '+ 15 Jahre Erfahrung']) expect(text(html)).toContain(claim);
+    expect(text(html)).not.toMatch(/24\s*h/);
+    for (const icon of ['icon-experts', 'icon-callback', 'icon-experience']) expect(imgTag(`/brand/${icon}.png`)).toContain('alt=""');
+  });
+
+  it('every brand file is in public/brand', () => {
+    for (const f of ['planeco-mark', 'google-rating', 'dgnb', 'das-handwerk', 'icon-experts', 'icon-callback', 'icon-experience']) {
+      expect(existsSync(path.resolve(process.cwd(), `public/brand/${f}.png`)), f).toBe(true);
     }
-    for (const borrowed of ['DGNB', 'Google', 'Handwerk', 'Jahre Erfahrung', 'Experten']) expect(text(html)).not.toContain(borrowed);
   });
 
   it('footer links the privacy page in a new tab, so a half-filled form survives', () => {
