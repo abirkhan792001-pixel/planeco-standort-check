@@ -39,7 +39,7 @@ export default function Home() {
               ))}
             </ol>
             <a href="#formular"
-              className={`mt-10 hidden min-h-14 items-center gap-3 rounded-full bg-terracotta-deep px-8 text-lg font-semibold text-white shadow-[0_8px_24px_-12px_rgb(176_90_55/0.7)] transition hover:brightness-90 md:inline-flex ${focusRing}`}>
+              className={`mt-10 hidden min-h-14 items-center gap-3 rounded-full bg-terracotta-deep px-8 text-lg font-semibold text-white shadow-[0_8px_24px_-12px_rgb(169_86_58/0.7)] transition hover:brightness-90 md:inline-flex ${focusRing}`}>
               Jetzt Standort prüfen <span aria-hidden="true">→</span>
             </a>
           </div>
@@ -58,7 +58,7 @@ export default function Home() {
       </main>
 
       <footer className="px-4 pb-10 pt-2 text-center text-sm text-muted">
-        <a href="/datenschutz" className="underline underline-offset-2 hover:text-ink">Datenschutzhinweise</a>
+        <a href="/datenschutz" className={`inline-flex min-h-11 items-center underline underline-offset-2 hover:text-ink ${focusRing}`}>Datenschutzhinweise</a>
       </footer>
     </div>
   );

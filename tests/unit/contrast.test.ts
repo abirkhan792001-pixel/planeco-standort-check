@@ -41,8 +41,8 @@ describe('brand tokens meet WCAG AA (spec §3.1)', () => {
   it('ink on white ≥ 4.5', () => expect(contrast(token('ink'), WHITE)).toBeGreaterThanOrEqual(4.5));
   it('muted on white ≥ 4.5', () => expect(contrast(token('muted'), WHITE)).toBeGreaterThanOrEqual(4.5));
   it('white CTA text on terracotta-deep ≥ 4.5', () => expect(contrast(WHITE, token('terracotta-deep'))).toBeGreaterThanOrEqual(4.5));
-  it('terracotta-deep headline accent on cream ≥ 3 (large text)', () =>
-    expect(contrast(token('terracotta-deep'), token('cream'))).toBeGreaterThanOrEqual(3));
+  it('terracotta-deep text on cream ≥ 4.5 (header button, headline accent)', () =>
+    expect(contrast(token('terracotta-deep'), token('cream'))).toBeGreaterThanOrEqual(4.5));
   it('brand terracotta is NOT safe for text (why terracotta-deep exists)', () =>
     expect(contrast(WHITE, token('terracotta'))).toBeLessThan(3));
 });

@@ -61,7 +61,7 @@ export function ToggleChip({ active, onClick, children }: { active: boolean; onC
 export function PillButton({ sub, children, className = '', ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { sub?: ReactNode }) {
   return (
     <button {...rest}
-      className={`flex min-h-16 w-full flex-col items-center justify-center rounded-full bg-terracotta-deep px-6 py-3 text-center text-white shadow-[0_8px_24px_-12px_rgb(176_90_55/0.7)] transition hover:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100 ${className}`}>
+      className={`flex min-h-16 w-full flex-col items-center justify-center rounded-full bg-terracotta-deep px-6 py-3 text-center text-white shadow-[0_8px_24px_-12px_rgb(169_86_58/0.7)] transition hover:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100 ${className}`}>
       <span className="inline-flex items-center gap-2 text-lg font-semibold leading-tight sm:text-xl">{children}</span>
       {sub && <span className="mt-0.5 text-sm font-normal">{sub}</span>}
     </button>
