@@ -3,35 +3,8 @@ import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAt
 /** Presentational pieces of the public form (Heyflow look: large white fields, soft shadow). No state. */
 
 export const softShadow = 'shadow-[0_1px_2px_rgb(34_64_60/0.08)]';
-const fieldBase =
-  'block min-h-14 w-full border border-line bg-white px-4 py-3 text-base text-ink focus:border-ink focus:outline-hidden focus:ring-2 focus:ring-ink aria-[invalid=true]:border-red-700';
 /** Visible keyboard focus for buttons and links on the public page. */
 export const focusRing = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
-
-/** Text inputs, selects and textareas. */
-export const inputCls = `mt-1.5 rounded-md ${softShadow} ${fieldBase}`;
-/** An input joined to a leading icon cell; the InputWithIcon wrapper carries margin, radius and shadow. */
-export const joinedInputCls = `min-w-0 rounded-r-md ${fieldBase}`;
-
-export function Field(props: { id: string; label: string; error?: string; hint?: string; children: ReactNode }) {
-  return (
-    <div>
-      <label htmlFor={props.id} className="block text-sm font-medium text-ink">{props.label}</label>
-      {props.children}
-      {props.hint && !props.error && <p id={`${props.id}-hint`} className="mt-1.5 text-sm text-muted">{props.hint}</p>}
-      {props.error && <p id={`${props.id}-error`} className="mt-1.5 text-sm text-red-700">{props.error}</p>}
-    </div>
-  );
-}
-
-export function InputWithIcon({ icon, children }: { icon: ReactNode; children: ReactNode }) {
-  return (
-    <div className={`mt-1.5 flex rounded-md ${softShadow}`}>
-      <span aria-hidden="true" className="grid w-14 shrink-0 place-items-center rounded-l-md border border-r-0 border-line bg-paper text-ink">{icon}</span>
-      {children}
-    </div>
-  );
-}
 
 /** Single-choice card with a radio-style dot (Vorhaben). A toggle button: clicking the active card clears it. */
 export function OptionCard({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: ReactNode; children: ReactNode }) {
@@ -57,13 +30,12 @@ export function ToggleChip({ active, onClick, children }: { active: boolean; onC
   );
 }
 
-/** The two-line terracotta pill used for the submit button. */
-export function PillButton({ sub, children, className = '', ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { sub?: ReactNode }) {
+/** The terracotta pill used for "Weiter" and the submit button. */
+export function PillButton({ children, className = '', ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button {...rest}
-      className={`flex min-h-16 w-full flex-col items-center justify-center rounded-full bg-terracotta-deep px-6 py-3 text-center text-white shadow-[0_8px_24px_-12px_rgb(169_86_58/0.7)] transition hover:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100 ${className}`}>
-      <span className="inline-flex items-center gap-2 text-lg font-semibold leading-tight sm:text-xl">{children}</span>
-      {sub && <span className="mt-0.5 text-sm font-normal">{sub}</span>}
+      className={`flex min-h-16 w-full items-center justify-center gap-2 rounded-full bg-terracotta-deep px-6 py-3 text-center text-lg font-semibold leading-tight text-white shadow-[0_8px_24px_-12px_rgb(169_86_58/0.7)] transition hover:brightness-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ink disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:brightness-100 sm:text-xl ${className}`}>
+      {children}
     </button>
   );
 }

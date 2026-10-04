@@ -3,12 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { captureAttribution } from '@/lib/attribution/capture';
 import type { RawAttribution } from '@/lib/attribution/types';
-import { fieldErrors, leadPayloadSchema } from '@/lib/leads/schema';
-import { PROJECT_TYPES, REACHABILITY, type ProjectType, type Reachability } from '@/lib/leads/types';
-import { PROJECT_TYPE_LABELS, REACHABILITY_LABELS } from '@/lib/labels';
 import { isReservedEmailDomain } from '@/lib/config/app';
-import { CheckIcon, Field, InputWithIcon, inputCls, joinedInputCls, OptionCard, PhoneIcon, PillButton, softShadow, Spinner, ToggleChip } from './form-ui';
-import { NEXT_STEPS } from './landing/next-steps';
+import { PROJECT_TYPE_LABELS, REACHABILITY_HOURS, REACHABILITY_LABELS } from '@/lib/labels';
+import { PROJECT_TYPES, REACHABILITY, type ProjectType, type Reachability } from '@/lib/leads/types';
+import { firstErrorStep, STEP_FIELDS, STEP_TITLES, STEPS, validateAll, validateStep, type Step } from '@/lib/leads/wizard';
+import { ErrorIcon, FieldNote, focusRing, OptionCard, PhoneIcon, PillButton, SelectField, Spinner, TextArea, TextField, ToggleChip } from './form-ui';
+import { LogoBadge, PlanecoMark, TrustBadges } from './landing/brand';
+import { GermanyMap } from './landing/germany-map';
 import { PROJECT_ICONS } from './landing/project-icons';
 
 type Locality = { name: string };
@@ -22,12 +23,11 @@ const EMPTY: Values = {
   firstName: '', lastName: '', phone: '', email: '', reachability: [], website: '',
 };
 
-const PAGE_ORDER = ['addressUnknown', 'postalCode', 'city', 'street', 'houseNumber', 'plotNote', 'projectType', 'firstName', 'lastName', 'phone', 'email', 'reachability'];
+const WEBSITE_URL = 'https://www.planecobuilding.de/';
+const headingCls = 'text-center text-3xl font-bold tracking-tight text-ink outline-none sm:text-4xl';
 
-const legendCls = 'mb-2 w-full text-center text-2xl font-bold tracking-tight text-ink';
-const alertCls = `rounded-lg border-l-4 border-red-700 bg-white p-4 text-sm text-red-800 ${softShadow}`;
-
-export function LeadForm() {
+/** The three form steps and the success page (landing spec §10). `step`/`onStep` are owned by StandortFlow. */
+export function LeadForm({ step, active, onStep }: { step: Step; active: boolean; onStep: (next: 0 | Step) => void }) {
   const [idempotencyKey] = useState(() => crypto.randomUUID());
   const renderedAt = useRef(Date.now());
   const [attr, setAttr] = useState<{ attribution: RawAttribution; isTest: boolean }>({ attribution: {}, isTest: false });
@@ -39,9 +39,10 @@ export function LeadForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
-  const alertRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const successRef = useRef<HTMLHeadingElement>(null);
   const [focusSeq, setFocusSeq] = useState(0);
+  const shown = useRef({ step, active });
 
   useEffect(() => {
     setAttr(captureAttribution(window.location.search, document.referrer, window.location.pathname));
@@ -90,14 +91,21 @@ export function LeadForm() {
     return () => ctrl.abort();
   }, [v.postalCode]);
 
+  // A new step (or the form becoming visible) moves focus to its question, so screen readers announce it.
+  useEffect(() => {
+    const changed = shown.current.step !== step || shown.current.active !== active;
+    shown.current = { step, active };
+    if (active && changed) headingRef.current?.focus();
+  }, [step, active]);
+
+  // After a failed check, focus the first broken field of the (possibly new) current step. Runs after the effect above.
   useEffect(() => {
     if (focusSeq === 0) return;
-    for (const k of PAGE_ORDER) {
+    for (const k of STEP_FIELDS[step]) {
       if (!errors[k]) continue;
       const el = formRef.current?.querySelector<HTMLElement>(`[name="${k}"], [data-field="${k}"]`);
       if (el) { el.focus(); return; }
     }
-    alertRef.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusSeq]);
 
@@ -105,22 +113,40 @@ export function LeadForm() {
     if (status === 'success') successRef.current?.focus();
   }, [status]);
 
+  const payload = () => ({
+    ...v, idempotencyKey, fillMs: Math.min(Math.round(Date.now() - renderedAt.current), 604_800_000), isTest: attr.isTest, attribution: attr.attribution,
+  });
+
+  const showErrors = (errs: Record<string, string>) => {
+    setErrors(errs);
+    const target = firstErrorStep(errs);
+    if (target !== null && target !== step) onStep(target);
+    setFocusSeq((n) => n + 1);
+  };
+
+  const chooseProject = (t: ProjectType) => {
+    set('projectType', t);
+    onStep(2);
+  };
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (status === 'submitting') return;
-    const payload = { ...v, idempotencyKey, fillMs: Math.min(Math.round(Date.now() - renderedAt.current), 604_800_000), isTest: attr.isTest, attribution: attr.attribution };
-    const local = leadPayloadSchema.safeParse(payload);
-    if (!local.success) {
-      const errs = fieldErrors(local.error);
-      setErrors(errs);
-      setFocusSeq((n) => n + 1);
+    const p = payload();
+    if (step < 3) {
+      const errs = validateStep(step, p);
+      if (Object.keys(errs).length > 0) { showErrors(errs); return; }
+      setErrors({});
+      onStep((step + 1) as Step);
       return;
     }
+    const errs = validateAll(p);
+    if (Object.keys(errs).length > 0) { showErrors(errs); return; }
     setErrors({});
     setStatus('submitting');
     setMessage(null);
     try {
-      const res = await fetch('/api/leads', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetch('/api/leads', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(p) });
       if (res.status === 200 || res.status === 201 || res.status === 202) {
         setStatus('success');
         window.scrollTo({ top: 0 });
@@ -128,9 +154,8 @@ export function LeadForm() {
       }
       if (res.status === 422) {
         const json = (await res.json()) as { errors?: Record<string, string> };
-        setErrors(json.errors ?? {});
-        setFocusSeq((n) => n + 1);
         setStatus('idle');
+        showErrors(json.errors ?? {});
         return;
       }
       const phone = process.env.NEXT_PUBLIC_CONTACT_PHONE;
@@ -144,26 +169,27 @@ export function LeadForm() {
 
   if (status === 'success') {
     return (
-      <div role="status" className={`rounded-[2rem] bg-white p-6 text-ink sm:p-10 ${softShadow}`}>
-        <h2 ref={successRef} tabIndex={-1} className="text-3xl font-bold tracking-tight outline-none">Vielen Dank, {v.firstName}!</h2>
-        <p className="mt-3">
-          Wir haben Ihre Anfrage erhalten.{' '}
-          {isReservedEmailDomain(v.email)
-            ? 'Testadresse erkannt – es wird keine Bestätigungs-E-Mail versendet.'
-            : <>Wir senden Ihnen eine Bestätigung an <strong>{v.email}</strong>. Falls sie nicht ankommt, schauen Sie bitte auch im Spam-Ordner nach.</>}
-        </p>
-        <p className="mt-2">Unser Team prüft Ihren Standort und meldet sich in der Regel am nächsten Werktag telefonisch bei Ihnen.</p>
-        <ol className="mt-8 space-y-3">
-          {NEXT_STEPS.map((step, i) => (
-            <li key={step} className="flex items-center gap-3">
-              <span aria-hidden="true" className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold ${i === 0 ? 'bg-ink text-white' : 'border-2 border-ink/30 text-ink'}`}>
-                {i === 0 ? <CheckIcon /> : i + 1}
-              </span>
-              <span className={i === 0 ? 'font-medium' : 'text-muted'}>{i === 0 && <span className="sr-only">Erledigt: </span>}{step}</span>
-            </li>
-          ))}
-        </ol>
-      </div>
+      <section className="mx-auto max-w-2xl px-4 pb-16 pt-6 text-center sm:px-6">
+        <LogoBadge />
+        <div role="status">
+          <h1 ref={successRef} tabIndex={-1} className={headingCls}>
+            Perfekt! Wir haben Ihre Anfrage erhalten. <span aria-hidden="true">🎉</span>
+          </h1>
+          <p className="mt-3 text-xl text-muted">Vielen Dank, {v.firstName} – wir helfen Ihnen gerne.</p>
+          <p className="mx-auto mt-10 max-w-xl">
+            {isReservedEmailDomain(v.email)
+              ? 'Testadresse erkannt – es wird keine Bestätigungs-E-Mail versendet.'
+              : <>Wir senden Ihnen eine Bestätigung an <strong>{v.email}</strong>. Falls sie nicht ankommt, schauen Sie bitte auch im Spam-Ordner nach.</>}
+          </p>
+          <p className="mx-auto mt-3 max-w-xl">Unser Team prüft Ihren Standort und meldet sich in der Regel am nächsten Werktag telefonisch bei Ihnen.</p>
+        </div>
+        <a href={WEBSITE_URL} className={`mt-12 inline-flex min-h-11 items-center gap-3 text-lg font-semibold text-muted transition-colors hover:text-ink ${focusRing}`}>
+          Zurück zur Website
+          <span aria-hidden="true" className="grid size-7 place-items-center rounded bg-ink">
+            <PlanecoMark className="h-4 w-auto brightness-0 invert" />
+          </span>
+        </a>
+      </section>
     );
   }
 
@@ -172,115 +198,127 @@ export function LeadForm() {
     'aria-invalid': Boolean(err(k)),
     'aria-describedby': err(k) ? `${k}-error` : hint ? `${k}-hint` : undefined,
   });
+  const formMessage = errors.form ?? (status === 'error' ? message : null);
 
   return (
-    <form ref={formRef} method="post" onSubmit={onSubmit} noValidate className="space-y-12">
-      {Object.keys(errors).length > 0 && (
-        <div ref={alertRef} tabIndex={-1} role="alert" className={alertCls}>{errors.form ?? "Bitte prüfen Sie die markierten Felder."}</div>
-      )}
+    <form ref={formRef} method="post" onSubmit={onSubmit} noValidate className="mx-auto max-w-2xl px-4 pb-16 sm:px-6">
+      <div aria-hidden="true" className="h-1 w-full overflow-hidden rounded-full bg-ink/10">
+        <div className="h-full rounded-full bg-ink transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${(step / STEPS.length) * 100}%` }} />
+      </div>
+      <p className="mt-3 text-center text-sm text-muted">Schritt {step} von {STEPS.length}</p>
+      <div className="mt-6"><LogoBadge /></div>
+      <h1 id="step-title" ref={headingRef} tabIndex={-1} className={headingCls}>{STEP_TITLES[step]}</h1>
 
-      <fieldset className="space-y-5">
-        <legend className={legendCls}>Ihr Grundstück</legend>
-        <label className="flex min-h-11 items-center gap-3 text-base text-ink">
-          <input type="checkbox" name="addressUnknown" className="size-5 accent-ink" checked={v.addressUnknown}
-            onChange={(e) => set('addressUnknown', e.target.checked)} />
-          Ich kenne die genaue Adresse noch nicht
-        </label>
-
-        {!v.addressUnknown && (
-          <>
-            <div className="grid grid-cols-[7rem_1fr] gap-3">
-              <Field id="postalCode" label="PLZ" error={err('postalCode')} hint={plzWarning ?? undefined}>
-                <input id="postalCode" name="postalCode" inputMode="numeric" autoComplete="off" maxLength={5} className={inputCls}
-                  value={v.postalCode} onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, ''))} {...aria('postalCode', plzWarning)} />
-              </Field>
-              <Field id="city" label="Ort" error={err('city')}>
-                {localities.length > 1 ? (
-                  <select id="city" name="city" className={inputCls} value={v.city} onChange={(e) => set('city', e.target.value)} {...aria('city')}>
-                    <option value="">Bitte wählen</option>
-                    {localities.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
-                  </select>
-                ) : (
-                  <input id="city" name="city" autoComplete="off" className={inputCls} value={v.city} onChange={(e) => set('city', e.target.value)} {...aria('city')} />
-                )}
-              </Field>
-            </div>
-            <div className="grid grid-cols-[1fr_6rem] gap-3">
-              <Field id="street" label="Straße" error={err('street')}>
-                <input id="street" name="street" autoComplete="off" className={inputCls} value={v.street} onChange={(e) => set('street', e.target.value)} {...aria('street')} />
-              </Field>
-              <Field id="houseNumber" label="Nr." error={err('houseNumber')}>
-                <input id="houseNumber" name="houseNumber" autoComplete="off" maxLength={10} className={inputCls} value={v.houseNumber} onChange={(e) => set('houseNumber', e.target.value)} {...aria('houseNumber')} />
-              </Field>
-            </div>
-            <p className="text-sm text-muted">Die Adresse des Grundstücks – nicht Ihre Wohnadresse, falls abweichend. Keine Hausnummer? Einfach leer lassen.</p>
-          </>
-        )}
-
-        <Field id="plotNote" label={v.addressUnknown ? 'Wo liegt das Grundstück? (z. B. Ort, Straße, Flurstück)' : 'Weitere Angaben (optional), z. B. Flurstück'} error={err('plotNote')}>
-          <textarea id="plotNote" name="plotNote" rows={3} maxLength={1000} className={inputCls} value={v.plotNote} onChange={(e) => set('plotNote', e.target.value)} {...aria('plotNote')} />
-        </Field>
-
-        <div>
-          <p id="projectType-label" className="text-sm font-medium text-ink">Vorhaben (optional)</p>
-          <div role="group" aria-labelledby="projectType-label" data-field="projectType" tabIndex={-1} className="mt-2 grid gap-3 sm:grid-cols-2">
+      {step === 1 && (
+        <div className="mt-10">
+          <div role="group" aria-labelledby="step-title" data-field="projectType" tabIndex={-1}
+            aria-describedby={err('projectType') ? 'projectType-error' : undefined} className="space-y-3">
             {PROJECT_TYPES.map((t) => (
-              <OptionCard key={t} active={v.projectType === t} icon={PROJECT_ICONS[t]} onClick={() => set('projectType', v.projectType === t ? null : t)}>
+              <OptionCard key={t} active={v.projectType === t} icon={PROJECT_ICONS[t]} onClick={() => chooseProject(t)}>
                 {PROJECT_TYPE_LABELS[t]}
               </OptionCard>
             ))}
           </div>
+          <FieldNote id="projectType" error={err('projectType')} />
         </div>
-      </fieldset>
+      )}
 
-      <fieldset className="space-y-5">
-        <legend className={legendCls}>Ihre Kontaktdaten</legend>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <Field id="firstName" label="Vorname" error={err('firstName')}>
-            <input id="firstName" name="firstName" autoComplete="given-name" className={inputCls} value={v.firstName} onChange={(e) => set('firstName', e.target.value)} {...aria('firstName')} />
-          </Field>
-          <Field id="lastName" label="Nachname" error={err('lastName')}>
-            <input id="lastName" name="lastName" autoComplete="family-name" className={inputCls} value={v.lastName} onChange={(e) => set('lastName', e.target.value)} {...aria('lastName')} />
-          </Field>
-        </div>
-        <Field id="phone" label="Telefon" error={err('phone')}>
-          <InputWithIcon icon={<PhoneIcon />}>
-            <input id="phone" name="phone" type="tel" autoComplete="tel" className={joinedInputCls} value={v.phone} onChange={(e) => set('phone', e.target.value)} {...aria('phone')} />
-          </InputWithIcon>
-        </Field>
-        <Field id="email" label="E-Mail" error={err('email')}>
-          <input id="email" name="email" type="email" autoComplete="email" className={inputCls} value={v.email} onChange={(e) => set('email', e.target.value)} {...aria('email')} />
-        </Field>
-        <div>
-          <p id="reachability-label" className="text-sm font-medium text-ink">Wann sind Sie gut erreichbar? (optional)</p>
-          <div role="group" aria-labelledby="reachability-label" data-field="reachability" tabIndex={-1} className="mt-2 flex flex-wrap gap-2">
-            {REACHABILITY.map((r) => (
-              <ToggleChip key={r} active={v.reachability.includes(r)}
-                onClick={() => set('reachability', v.reachability.includes(r) ? v.reachability.filter((x) => x !== r) : [...v.reachability, r])}>
-                {REACHABILITY_LABELS[r]}
-              </ToggleChip>
-            ))}
+      {step === 2 && (
+        <div className="mt-10 grid items-center gap-8 md:grid-cols-[11rem_1fr]">
+          <GermanyMap className="mx-auto hidden w-40 md:block" />
+          <div className="space-y-4">
+            <label className="flex min-h-11 items-center gap-3 text-base text-ink">
+              <input type="checkbox" name="addressUnknown" className="size-5 accent-ink" checked={v.addressUnknown}
+                onChange={(e) => set('addressUnknown', e.target.checked)} />
+              Ich kenne die genaue Adresse noch nicht
+            </label>
+            {!v.addressUnknown && (
+              <>
+                <div className="grid grid-cols-[7.5rem_1fr] gap-3">
+                  <TextField id="postalCode" name="postalCode" label="PLZ" inputMode="numeric" autoComplete="off" maxLength={5}
+                    value={v.postalCode} onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, ''))}
+                    error={err('postalCode')} hint={plzWarning ?? undefined} {...aria('postalCode', plzWarning)} />
+                  {localities.length > 1 ? (
+                    <SelectField id="city" name="city" label="Ort" value={v.city} onChange={(e) => set('city', e.target.value)} error={err('city')} {...aria('city')}>
+                      <option value="">Bitte wählen</option>
+                      {localities.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
+                    </SelectField>
+                  ) : (
+                    <TextField id="city" name="city" label="Ort" autoComplete="off" value={v.city} onChange={(e) => set('city', e.target.value)}
+                      error={err('city')} {...aria('city')} />
+                  )}
+                </div>
+                <div className="grid grid-cols-[1fr_6.5rem] gap-3">
+                  <TextField id="street" name="street" label="Straße" autoComplete="off" value={v.street} onChange={(e) => set('street', e.target.value)}
+                    error={err('street')} {...aria('street')} />
+                  <TextField id="houseNumber" name="houseNumber" label="Nr." autoComplete="off" maxLength={10} value={v.houseNumber}
+                    onChange={(e) => set('houseNumber', e.target.value)} error={err('houseNumber')} {...aria('houseNumber')} />
+                </div>
+                <p className="text-sm text-muted">Die Adresse des Grundstücks – nicht Ihre Wohnadresse, falls abweichend. Keine Hausnummer? Einfach leer lassen.</p>
+              </>
+            )}
+            <TextArea id="plotNote" name="plotNote" rows={3} maxLength={1000}
+              label={v.addressUnknown ? 'Wo liegt das Grundstück? (z. B. Ort, Straße, Flurstück)' : 'Weitere Angaben (optional), z. B. Flurstück'}
+              value={v.plotNote} onChange={(e) => set('plotNote', e.target.value)} error={err('plotNote')} {...aria('plotNote')} />
           </div>
         </div>
-      </fieldset>
+      )}
+
+      {step === 3 && (
+        <div className="mt-10 space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <TextField id="firstName" name="firstName" label="Vorname" autoComplete="given-name" value={v.firstName}
+              onChange={(e) => set('firstName', e.target.value)} error={err('firstName')} {...aria('firstName')} />
+            <TextField id="lastName" name="lastName" label="Nachname" autoComplete="family-name" value={v.lastName}
+              onChange={(e) => set('lastName', e.target.value)} error={err('lastName')} {...aria('lastName')} />
+          </div>
+          <TextField id="email" name="email" type="email" label="E-Mail-Adresse" autoComplete="email" value={v.email}
+            onChange={(e) => set('email', e.target.value)} error={err('email')} {...aria('email')} />
+          <TextField id="phone" name="phone" type="tel" label="Telefonnummer" autoComplete="tel" icon={<PhoneIcon />} value={v.phone}
+            onChange={(e) => set('phone', e.target.value)} error={err('phone')} {...aria('phone')} />
+          <div className="pt-2">
+            <p id="reachability-label" className="text-sm font-medium text-ink">Wann sind Sie gut erreichbar? (optional)</p>
+            <div role="group" aria-labelledby="reachability-label" data-field="reachability" tabIndex={-1} className="mt-2 flex flex-wrap gap-2">
+              {REACHABILITY.map((r) => (
+                <ToggleChip key={r} active={v.reachability.includes(r)}
+                  onClick={() => set('reachability', v.reachability.includes(r) ? v.reachability.filter((x) => x !== r) : [...v.reachability, r])}>
+                  {REACHABILITY_LABELS[r]} <span className="font-normal">· {REACHABILITY_HOURS[r]}</span>
+                </ToggleChip>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div aria-hidden="true" inert className="absolute -left-[9999px] h-0 w-0 overflow-hidden">
         <label htmlFor="website">Website</label>
         <input id="website" name="website" tabIndex={-1} autoComplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" value={v.website} onChange={(e) => set('website', e.target.value)} />
       </div>
 
-      {status === 'error' && message && <div role="alert" className={alertCls}>{message}</div>}
+      {formMessage && <p role="alert" className="mt-8 flex items-start justify-center gap-1.5 text-center text-sm text-red-700"><ErrorIcon />{formMessage}</p>}
 
-      <div className="space-y-4">
-        <PillButton type="submit" disabled={!ready || status === 'submitting'}
-          sub={ready && status !== 'submitting' ? 'kostenlos und unverbindlich' : undefined}>
-          {!ready ? 'Wird geladen …' : status === 'submitting' ? <><Spinner />Wird gesendet …</> : 'Kostenlosen Standort-Check anfordern'}
-        </PillButton>
-        <p className="text-center text-sm text-muted">
-          Wir verwenden Ihre Angaben ausschließlich zur Bearbeitung Ihrer Anfrage. Details in unseren{' '}
-          <a href="/datenschutz" target="_blank" rel="noopener" className="font-medium text-ink underline underline-offset-2">Datenschutzhinweisen</a>.
-        </p>
+      {step > 1 && (
+        <div className="mt-8 space-y-4">
+          <PillButton type="submit" disabled={!ready || status === 'submitting'}>
+            {!ready ? 'Wird geladen …' : step === 2 ? 'Weiter' : status === 'submitting' ? <><Spinner />Wird gesendet …</> : 'Kostenlosen Standort-Check anfordern'}
+          </PillButton>
+          {step === 3 && (
+            <p className="text-center text-sm text-muted">
+              Wir verwenden Ihre Angaben ausschließlich zur Bearbeitung Ihrer Anfrage. Details in unseren{' '}
+              <a href="/datenschutz" target="_blank" rel="noopener" className="font-medium text-ink underline underline-offset-2">Datenschutzhinweisen</a>.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="mt-6 text-center">
+        <button type="button" onClick={() => onStep(step === 1 ? 0 : ((step - 1) as Step))}
+          className={`inline-flex min-h-11 items-center gap-2 text-sm font-medium text-muted underline-offset-2 hover:text-ink hover:underline ${focusRing}`}>
+          <span aria-hidden="true">←</span> Zurück
+        </button>
       </div>
+
+      {step === 3 && <TrustBadges className="mt-12 justify-center" />}
     </form>
   );
 }

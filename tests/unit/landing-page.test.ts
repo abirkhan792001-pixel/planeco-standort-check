@@ -23,11 +23,10 @@ describe('landing page (/)', () => {
     expect(h1).toContain('text-terracotta-deep');
   });
 
-  it('both calls to action jump to the form', () => {
-    expect(html.match(/href="#formular"/g)).toHaveLength(2);
-    expect(html).toContain('id="formular"');
-    expect(text(html)).toContain('Kostenlos anfragen');
-    expect(text(html)).toContain('Jetzt Standort prüfen');
+  it('the start screen offers two buttons into the form, which is mounted but hidden', () => {
+    expect(html).toMatch(/<button type="button"[^>]*>Kostenlos anfragen<\/button>/);
+    expect(html).toMatch(/<button type="button"[^>]*>Jetzt Standort prüfen/);
+    expect(html).toMatch(/<div hidden=""><form/);
   });
 
   it('shows the three steps in order as a list', () => {
@@ -39,7 +38,7 @@ describe('landing page (/)', () => {
   it('renders the site-plan illustration as one labelled image', () =>
     expect(html).toMatch(/<svg[^>]*role="img"[^>]*aria-label="Skizze eines Grundstücks mit Standort-Markierung"/));
 
-  it('renders the form', () => expect(html).toContain('name="postalCode"'));
+  it('the hidden form starts at step 1', () => expect(html).toContain('data-field="projectType"'));
 
   it('shows the Planeco mark twice (header and above the form), decorative', () => {
     const tags = imgTags('/brand/planeco-mark.png');

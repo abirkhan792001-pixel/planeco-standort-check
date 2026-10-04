@@ -22,9 +22,9 @@ const BADGES = [
 ] as const;
 
 /** Planeco's trust badges, shown at their native size (cropped from planeco's site). */
-export function TrustBadges() {
+export function TrustBadges({ className = '' }: { className?: string }) {
   return (
-    <ul aria-label="Bewertungen und Mitgliedschaften" className="mt-12 flex flex-wrap items-center justify-center gap-x-10 gap-y-6">
+    <ul aria-label="Bewertungen und Mitgliedschaften" className={`flex flex-wrap items-center gap-x-6 gap-y-6 sm:gap-x-10 ${className}`}>
       {BADGES.map((b) => (
         <li key={b.src}>
           <Image src={b.src} alt={b.alt} width={b.width} height={b.height} unoptimized />
