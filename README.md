@@ -83,10 +83,10 @@ See `.env.example`.
   - `email/` (Brevo, confirmation rules, MX check, fallback), `dashboard/` (filters, paged loading), `export/xlsx.ts`, `report.ts`, `maintenance/`, `labels.ts`
 - `supabase/migrations/` — schema, functions (`claim_lead`, `release_lead`, `set_lead_status`, `set_lead_note`), RLS, `0004`/`0005` additions.
 - `scripts/seed-samples.mjs` — the five case samples.
-- `tests/` — Vitest, 382 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
+- `tests/` — Vitest, 441 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
 
 ## Tested on
-Automated: `npm test` (382 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
+Automated: `npm test` (441 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
 
 Verified against production / the live database:
 - **Case samples (production, seeded via the real API):** all five stored and enriched as listed above — #1 house-level, PLZ mismatch (found 01097), Sachsen; #2 `address_unknown` + `ambiguous`, no coordinates; #3 street-level, PLZ mismatch (found 20255), DE-HH; #4 linked to #1 as duplicate (phone + address); #5 postcode-level, DE-SH, ~55 km from Hamburg. Test addresses were not mailed (`test_domain`). Re-running the seed replays (HTTP 200) and creates no new rows.
