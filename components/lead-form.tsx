@@ -118,6 +118,9 @@ export function LeadForm({ step, active, onStep }: { step: Step; active: boolean
   });
 
   const showErrors = (errs: Record<string, string>) => {
+    // Keys no step shows (fillMs, idempotencyKey, website, attribution) would leave a dead submit: add a visible message.
+    const shownKeys = Object.keys(errs).some((k) => k === 'form' || STEPS.some((s) => STEP_FIELDS[s].includes(k)));
+    if (!shownKeys) errs = { ...errs, form: 'Ihre Angaben konnten nicht gespeichert werden. Bitte prüfen Sie Ihre Eingaben.' };
     setErrors(errs);
     const target = firstErrorStep(errs);
     if (target !== null && target !== step) onStep(target);
@@ -237,17 +240,19 @@ export function LeadForm({ step, active, onStep }: { step: Step; active: boolean
                 <div className="grid grid-cols-[7.5rem_1fr] gap-3">
                   <TextField id="postalCode" name="postalCode" label="PLZ" inputMode="numeric" autoComplete="off" maxLength={5}
                     value={v.postalCode} onChange={(e) => setPostalCode(e.target.value.replace(/\D/g, ''))}
-                    error={err('postalCode')} hint={plzWarning ?? undefined} {...aria('postalCode', plzWarning)} />
+                    {...aria('postalCode', plzWarning)} />
                   {localities.length > 1 ? (
-                    <SelectField id="city" name="city" label="Ort" value={v.city} onChange={(e) => set('city', e.target.value)} error={err('city')} {...aria('city')}>
+                    <SelectField id="city" name="city" label="Ort" value={v.city} onChange={(e) => set('city', e.target.value)} {...aria('city')}>
                       <option value="">Bitte wählen</option>
                       {localities.map((l) => <option key={l.name} value={l.name}>{l.name}</option>)}
                     </SelectField>
                   ) : (
                     <TextField id="city" name="city" label="Ort" autoComplete="off" value={v.city} onChange={(e) => set('city', e.target.value)}
-                      error={err('city')} {...aria('city')} />
+                      {...aria('city')} />
                   )}
                 </div>
+                <FieldNote id="postalCode" error={err('postalCode')} hint={plzWarning ?? undefined} />
+                <FieldNote id="city" error={err('city')} />
                 <div className="grid grid-cols-[1fr_6.5rem] gap-3">
                   <TextField id="street" name="street" label="Straße" autoComplete="off" value={v.street} onChange={(e) => set('street', e.target.value)}
                     error={err('street')} {...aria('street')} />
@@ -295,7 +300,7 @@ export function LeadForm({ step, active, onStep }: { step: Step; active: boolean
         <input id="website" name="website" tabIndex={-1} autoComplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" value={v.website} onChange={(e) => set('website', e.target.value)} />
       </div>
 
-      {formMessage && <p role="alert" className="mt-8 flex items-start justify-center gap-1.5 text-center text-sm text-red-700"><ErrorIcon />{formMessage}</p>}
+      {step === 3 && formMessage && <p role="alert" className="mt-8 flex items-start justify-center gap-1.5 text-center text-sm text-red-700"><ErrorIcon />{formMessage}</p>}
 
       {step > 1 && (
         <div className="mt-8 space-y-4">
@@ -312,7 +317,7 @@ export function LeadForm({ step, active, onStep }: { step: Step; active: boolean
       )}
 
       <div className="mt-6 text-center">
-        <button type="button" onClick={() => onStep(step === 1 ? 0 : ((step - 1) as Step))}
+        <button type="button" onClick={() => window.history.back()}
           className={`inline-flex min-h-11 items-center gap-2 text-sm font-medium text-muted underline-offset-2 hover:text-ink hover:underline ${focusRing}`}>
           <span aria-hidden="true">←</span> Zurück
         </button>

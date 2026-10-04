@@ -72,12 +72,15 @@ describe('LeadForm steps (first render, before hydration)', () => {
     expect(html).toMatch(/<input id="street" placeholder=" "[^>]*\/><label for="street"/);
     expect(html).toContain('<svg viewBox="0 0 74.5 100" aria-hidden="true"');
     expect(html).toMatch(/<button type="submit" disabled=""[^>]*>Wird geladen …<\/button>/);
+    // PLZ/Ort notes are rendered full-width below the PLZ/Ort grid, not inside the narrow PLZ column; none without errors.
+    expect(html).not.toMatch(/id="(postalCode|city)-(error|hint)"/);
   });
 
   it('step 3: contact fields, phone icon cell, reachability with hours, privacy notice, badges', () => {
     const html = form(3);
     for (const n of ['firstName', 'lastName', 'email', 'phone']) expect(html).toContain(`name="${n}"`);
     expect(html).not.toContain('name="street"');
+    expect(html).toMatch(/<button type="submit" disabled=""[^>]*>Wird geladen …<\/button>/);
     expect(html).toMatch(/<span aria-hidden="true"[^>]*><svg(?:(?!<span)[^])*<\/svg><\/span><input id="phone"[^>]*type="tel"/);
     for (const chip of ['vormittags · 8–12 Uhr', 'nachmittags · 12–17 Uhr', 'abends · 17–20 Uhr']) expect(text(html)).toContain(chip);
     expect(text(html)).toContain('Wir verwenden Ihre Angaben ausschließlich zur Bearbeitung Ihrer Anfrage. Details in unseren Datenschutzhinweisen.');
