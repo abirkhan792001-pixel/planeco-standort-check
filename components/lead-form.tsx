@@ -7,6 +7,9 @@ import { fieldErrors, leadPayloadSchema } from '@/lib/leads/schema';
 import { PROJECT_TYPES, REACHABILITY, type ProjectType, type Reachability } from '@/lib/leads/types';
 import { PROJECT_TYPE_LABELS, REACHABILITY_LABELS } from '@/lib/labels';
 import { isReservedEmailDomain } from '@/lib/config/app';
+import { CheckIcon, Field, InputWithIcon, inputCls, joinedInputCls, OptionCard, PhoneIcon, PillButton, softShadow, Spinner, ToggleChip } from './form-ui';
+import { NEXT_STEPS } from './landing/next-steps';
+import { PROJECT_ICONS } from './landing/project-icons';
 
 type Locality = { name: string };
 type Values = {
@@ -21,27 +24,8 @@ const EMPTY: Values = {
 
 const PAGE_ORDER = ['addressUnknown', 'postalCode', 'city', 'street', 'houseNumber', 'plotNote', 'projectType', 'firstName', 'lastName', 'phone', 'email', 'reachability'];
 
-const inputCls = 'mt-1 block w-full rounded-lg border border-stone-300 bg-white px-3 py-3 text-base focus:border-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-700/30 aria-[invalid=true]:border-red-600';
-
-function Field(props: { id: string; label: string; error?: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label htmlFor={props.id} className="block text-sm font-medium text-stone-800">{props.label}</label>
-      {props.children}
-      {props.hint && !props.error && <p id={`${props.id}-hint`} className="mt-1 text-sm text-stone-500">{props.hint}</p>}
-      {props.error && <p id={`${props.id}-error`} className="mt-1 text-sm text-red-700">{props.error}</p>}
-    </div>
-  );
-}
-
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button type="button" aria-pressed={active} onClick={onClick}
-      className={`min-h-11 rounded-full border px-4 text-sm ${active ? 'border-emerald-800 bg-emerald-800 text-white' : 'border-stone-300 bg-white text-stone-800'}`}>
-      {children}
-    </button>
-  );
-}
+const legendCls = 'mb-2 w-full text-center text-2xl font-bold tracking-tight text-ink';
+const alertCls = `rounded-lg border-l-4 border-red-700 bg-white p-4 text-sm text-red-800 ${softShadow}`;
 
 export function LeadForm() {
   const [idempotencyKey] = useState(() => crypto.randomUUID());
@@ -160,15 +144,25 @@ export function LeadForm() {
 
   if (status === 'success') {
     return (
-      <div role="status" className="rounded-2xl bg-emerald-50 p-6 text-stone-900">
-        <h2 ref={successRef} tabIndex={-1} className="text-xl font-semibold outline-none">Vielen Dank, {v.firstName}!</h2>
-        <p className="mt-2">
+      <div role="status" className={`rounded-[2rem] bg-white p-6 text-ink sm:p-10 ${softShadow}`}>
+        <h2 ref={successRef} tabIndex={-1} className="text-3xl font-bold tracking-tight outline-none">Vielen Dank, {v.firstName}!</h2>
+        <p className="mt-3">
           Wir haben Ihre Anfrage erhalten.{' '}
           {isReservedEmailDomain(v.email)
             ? 'Testadresse erkannt – es wird keine Bestätigungs-E-Mail versendet.'
             : <>Wir senden Ihnen eine Bestätigung an <strong>{v.email}</strong>. Falls sie nicht ankommt, schauen Sie bitte auch im Spam-Ordner nach.</>}
         </p>
         <p className="mt-2">Unser Team prüft Ihren Standort und meldet sich in der Regel am nächsten Werktag telefonisch bei Ihnen.</p>
+        <ol className="mt-8 space-y-3">
+          {NEXT_STEPS.map((step, i) => (
+            <li key={step} className="flex items-center gap-3">
+              <span aria-hidden="true" className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold ${i === 0 ? 'bg-ink text-white' : 'border-2 border-ink/30 text-ink'}`}>
+                {i === 0 ? <CheckIcon /> : i + 1}
+              </span>
+              <span className={i === 0 ? 'font-medium' : 'text-muted'}>{i === 0 && <span className="sr-only">Erledigt: </span>}{step}</span>
+            </li>
+          ))}
+        </ol>
       </div>
     );
   }
@@ -180,15 +174,15 @@ export function LeadForm() {
   });
 
   return (
-    <form ref={formRef} method="post" onSubmit={onSubmit} noValidate className="space-y-8">
+    <form ref={formRef} method="post" onSubmit={onSubmit} noValidate className="space-y-12">
       {Object.keys(errors).length > 0 && (
-        <div ref={alertRef} tabIndex={-1} role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{errors.form ?? "Bitte prüfen Sie die markierten Felder."}</div>
+        <div ref={alertRef} tabIndex={-1} role="alert" className={alertCls}>{errors.form ?? "Bitte prüfen Sie die markierten Felder."}</div>
       )}
 
-      <fieldset className="space-y-4">
-        <legend className="text-lg font-semibold text-stone-900">Ihr Grundstück</legend>
-        <label className="flex items-center gap-3 text-sm text-stone-800">
-          <input type="checkbox" name="addressUnknown" className="size-5" checked={v.addressUnknown}
+      <fieldset className="space-y-5">
+        <legend className={legendCls}>Ihr Grundstück</legend>
+        <label className="flex min-h-11 items-center gap-3 text-base text-ink">
+          <input type="checkbox" name="addressUnknown" className="size-5 accent-ink" checked={v.addressUnknown}
             onChange={(e) => set('addressUnknown', e.target.checked)} />
           Ich kenne die genaue Adresse noch nicht
         </label>
@@ -219,7 +213,7 @@ export function LeadForm() {
                 <input id="houseNumber" name="houseNumber" autoComplete="off" maxLength={10} className={inputCls} value={v.houseNumber} onChange={(e) => set('houseNumber', e.target.value)} {...aria('houseNumber')} />
               </Field>
             </div>
-            <p className="text-sm text-stone-500">Die Adresse des Grundstücks – nicht Ihre Wohnadresse, falls abweichend. Keine Hausnummer? Einfach leer lassen.</p>
+            <p className="text-sm text-muted">Die Adresse des Grundstücks – nicht Ihre Wohnadresse, falls abweichend. Keine Hausnummer? Einfach leer lassen.</p>
           </>
         )}
 
@@ -228,17 +222,19 @@ export function LeadForm() {
         </Field>
 
         <div>
-          <p id="projectType-label" className="text-sm font-medium text-stone-800">Vorhaben (optional)</p>
-          <div role="group" aria-labelledby="projectType-label" data-field="projectType" tabIndex={-1} className="mt-2 flex flex-wrap gap-2">
+          <p id="projectType-label" className="text-sm font-medium text-ink">Vorhaben (optional)</p>
+          <div role="group" aria-labelledby="projectType-label" data-field="projectType" tabIndex={-1} className="mt-2 grid gap-3 sm:grid-cols-2">
             {PROJECT_TYPES.map((t) => (
-              <Chip key={t} active={v.projectType === t} onClick={() => set('projectType', v.projectType === t ? null : t)}>{PROJECT_TYPE_LABELS[t]}</Chip>
+              <OptionCard key={t} active={v.projectType === t} icon={PROJECT_ICONS[t]} onClick={() => set('projectType', v.projectType === t ? null : t)}>
+                {PROJECT_TYPE_LABELS[t]}
+              </OptionCard>
             ))}
           </div>
         </div>
       </fieldset>
 
-      <fieldset className="space-y-4">
-        <legend className="text-lg font-semibold text-stone-900">Ihre Kontaktdaten</legend>
+      <fieldset className="space-y-5">
+        <legend className={legendCls}>Ihre Kontaktdaten</legend>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field id="firstName" label="Vorname" error={err('firstName')}>
             <input id="firstName" name="firstName" autoComplete="given-name" className={inputCls} value={v.firstName} onChange={(e) => set('firstName', e.target.value)} {...aria('firstName')} />
@@ -248,19 +244,21 @@ export function LeadForm() {
           </Field>
         </div>
         <Field id="phone" label="Telefon" error={err('phone')}>
-          <input id="phone" name="phone" type="tel" autoComplete="tel" className={inputCls} value={v.phone} onChange={(e) => set('phone', e.target.value)} {...aria('phone')} />
+          <InputWithIcon icon={<PhoneIcon />}>
+            <input id="phone" name="phone" type="tel" autoComplete="tel" className={joinedInputCls} value={v.phone} onChange={(e) => set('phone', e.target.value)} {...aria('phone')} />
+          </InputWithIcon>
         </Field>
         <Field id="email" label="E-Mail" error={err('email')}>
           <input id="email" name="email" type="email" autoComplete="email" className={inputCls} value={v.email} onChange={(e) => set('email', e.target.value)} {...aria('email')} />
         </Field>
         <div>
-          <p id="reachability-label" className="text-sm font-medium text-stone-800">Wann sind Sie gut erreichbar? (optional)</p>
+          <p id="reachability-label" className="text-sm font-medium text-ink">Wann sind Sie gut erreichbar? (optional)</p>
           <div role="group" aria-labelledby="reachability-label" data-field="reachability" tabIndex={-1} className="mt-2 flex flex-wrap gap-2">
             {REACHABILITY.map((r) => (
-              <Chip key={r} active={v.reachability.includes(r)}
+              <ToggleChip key={r} active={v.reachability.includes(r)}
                 onClick={() => set('reachability', v.reachability.includes(r) ? v.reachability.filter((x) => x !== r) : [...v.reachability, r])}>
                 {REACHABILITY_LABELS[r]}
-              </Chip>
+              </ToggleChip>
             ))}
           </div>
         </div>
@@ -271,16 +269,16 @@ export function LeadForm() {
         <input id="website" name="website" tabIndex={-1} autoComplete="off" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" value={v.website} onChange={(e) => set('website', e.target.value)} />
       </div>
 
-      {status === 'error' && message && <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">{message}</div>}
+      {status === 'error' && message && <div role="alert" className={alertCls}>{message}</div>}
 
-      <div className="space-y-3">
-        <button type="submit" disabled={!ready || status === 'submitting'}
-          className="min-h-12 w-full rounded-lg bg-emerald-800 px-4 text-base font-semibold text-white disabled:opacity-60">
-          {!ready ? 'Wird geladen …' : status === 'submitting' ? 'Wird gesendet …' : 'Kostenlosen Standort-Check anfordern'}
-        </button>
-        <p className="text-xs text-stone-500">
+      <div className="space-y-4">
+        <PillButton type="submit" disabled={!ready || status === 'submitting'}
+          sub={ready && status !== 'submitting' ? 'kostenlos und unverbindlich' : undefined}>
+          {!ready ? 'Wird geladen …' : status === 'submitting' ? <><Spinner />Wird gesendet …</> : 'Kostenlosen Standort-Check anfordern'}
+        </PillButton>
+        <p className="text-center text-sm text-muted">
           Wir verwenden Ihre Angaben ausschließlich zur Bearbeitung Ihrer Anfrage. Details in unseren{' '}
-          <a href="/datenschutz" target="_blank" rel="noopener" className="underline">Datenschutzhinweisen</a>.
+          <a href="/datenschutz" target="_blank" rel="noopener" className="font-medium text-ink underline underline-offset-2">Datenschutzhinweisen</a>.
         </p>
       </div>
     </form>

@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+/* Planeco brand tokens (landing redesign spec §3.1). terracotta and salmon are decoration only. */
+@theme {
+  --color-cream: #F3F5EB;
+  --color-ink: #22403C;
+  --color-terracotta: #E0805F;
+  --color-terracotta-deep: #B05A37;
+  --color-paper: #FAF9F5;
+  --color-salmon: #EA9C8C;
+  --color-muted: #5A6A62;
+}
+
+/* Poppins comes from next/font (app/layout.tsx); used via `font-brand` on the public page only. */
+@theme inline {
+  --font-brand: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+}
