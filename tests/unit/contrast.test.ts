@@ -46,3 +46,11 @@ describe('brand tokens meet WCAG AA (spec §3.1)', () => {
   it('brand terracotta is NOT safe for text (why terracotta-deep exists)', () =>
     expect(contrast(WHITE, token('terracotta'))).toBeLessThan(3));
 });
+
+describe('resting control boundaries meet WCAG 1.4.11 non-text contrast (>= 3:1)', () => {
+  it.each([
+    ['line on cream (page background)', token('cream')],
+    ['line on white (inputs, chips)', WHITE],
+    ['line on paper (option cards, icon cell)', token('paper')],
+  ])('%s', (_label, bg) => expect(contrast(token('line'), bg)).toBeGreaterThanOrEqual(3));
+});

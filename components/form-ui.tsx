@@ -4,7 +4,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 export const softShadow = 'shadow-[0_1px_2px_rgb(34_64_60/0.08)]';
 const fieldBase =
-  'block min-h-14 w-full border border-transparent bg-white px-4 py-3 text-base text-ink focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/25 aria-[invalid=true]:border-red-700';
+  'block min-h-14 w-full border border-line bg-white px-4 py-3 text-base text-ink focus:border-ink focus:outline-none focus:ring-2 focus:ring-ink/25 aria-[invalid=true]:border-red-700';
 /** Visible keyboard focus for buttons and links on the public page. */
 export const focusRing = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink';
 
@@ -27,7 +27,7 @@ export function Field(props: { id: string; label: string; error?: string; hint?:
 export function InputWithIcon({ icon, children }: { icon: ReactNode; children: ReactNode }) {
   return (
     <div className={`mt-1.5 flex rounded-md ${softShadow}`}>
-      <span aria-hidden="true" className="grid w-14 shrink-0 place-items-center rounded-l-md bg-paper text-ink">{icon}</span>
+      <span aria-hidden="true" className="grid w-14 shrink-0 place-items-center rounded-l-md border border-r-0 border-line bg-paper text-ink">{icon}</span>
       {children}
     </div>
   );
@@ -37,8 +37,8 @@ export function InputWithIcon({ icon, children }: { icon: ReactNode; children: R
 export function OptionCard({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: ReactNode; children: ReactNode }) {
   return (
     <button type="button" aria-pressed={active} onClick={onClick}
-      className={`flex min-h-14 w-full items-center gap-3 rounded-lg border-2 bg-paper px-4 py-3 text-left text-base text-ink transition-colors ${focusRing} ${active ? 'border-ink' : `border-transparent ${softShadow} hover:border-terracotta`}`}>
-      <span aria-hidden="true" className={`grid size-5 shrink-0 place-items-center rounded-full border-2 ${active ? 'border-ink' : 'border-muted/50'}`}>
+      className={`flex min-h-14 w-full items-center gap-3 rounded-lg border bg-paper px-4 py-3 text-left text-base text-ink transition-colors ${focusRing} ${active ? 'border-ink ring-1 ring-ink' : `border-line ${softShadow} hover:border-terracotta`}`}>
+      <span aria-hidden="true" className={`grid size-5 shrink-0 place-items-center rounded-full border-2 ${active ? 'border-ink' : 'border-line'}`}>
         {active && <span className="size-2.5 rounded-full bg-ink" />}
       </span>
       {icon && <span aria-hidden="true" className="shrink-0">{icon}</span>}
@@ -51,7 +51,7 @@ export function OptionCard({ active, onClick, icon, children }: { active: boolea
 export function ToggleChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
     <button type="button" aria-pressed={active} onClick={onClick}
-      className={`min-h-11 rounded-full border-2 px-5 text-sm font-medium transition-colors ${focusRing} ${active ? 'border-ink bg-ink text-white' : `border-transparent bg-white text-ink ${softShadow} hover:border-terracotta`}`}>
+      className={`min-h-11 rounded-full border px-5 text-sm font-medium transition-colors ${focusRing} ${active ? 'border-ink bg-ink text-white' : `border-line bg-white text-ink ${softShadow} hover:border-terracotta`}`}>
       {children}
     </button>
   );

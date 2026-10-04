@@ -9,6 +9,8 @@
   --color-paper: #FAF9F5;
   --color-salmon: #EA9C8C;
   --color-muted: #5A6A62;
+  /* Resting control boundaries (inputs, cards, chips): WCAG 1.4.11 non-text contrast >= 3:1 on cream, white and paper. */
+  --color-line: #828F87;
 }
 
 /* Poppins comes from next/font (app/layout.tsx); used via `font-brand` on the public page only. */
