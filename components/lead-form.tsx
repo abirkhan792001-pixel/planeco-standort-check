@@ -100,13 +100,13 @@ export function LeadForm({ step, active, onStep }: { step: Step; active: boolean
   }, [step, active]);
 
   // The click that picks a Vorhaben must not land on whatever the next step renders under the finger (a double-click would
-  // tick "Adresse unbekannt"), so pointer input is ignored briefly after each step change. Keyboard is unaffected.
+  // tick "Adresse unbekannt"). Handlers set `settling` in the same event that changes the step, so the new step is committed
+  // already blocked; this effect lifts the block after 350 ms. Keyboard is unaffected.
   useEffect(() => {
-    if (!active) return;
-    setSettling(true);
+    if (!settling) return;
     const t = setTimeout(() => setSettling(false), 350);
-    return () => { clearTimeout(t); setSettling(false); };
-  }, [step, active]);
+    return () => clearTimeout(t);
+  }, [settling]);
 
   // After a failed check, focus the first broken field of the (possibly new) current step. Runs after the effect above.
   useEffect(() => {
@@ -133,12 +133,13 @@ export function LeadForm({ step, active, onStep }: { step: Step; active: boolean
     if (!shownKeys) errs = { ...errs, form: 'Ihre Angaben konnten nicht gespeichert werden. Bitte prüfen Sie Ihre Eingaben.' };
     setErrors(errs);
     const target = firstErrorStep(errs);
-    if (target !== null && target !== step) onStep(target);
+    if (target !== null && target !== step) { setSettling(true); onStep(target); }
     setFocusSeq((n) => n + 1);
   };
 
   const chooseProject = (t: ProjectType) => {
     set('projectType', t);
+    setSettling(true);
     onStep(2);
   };
 
@@ -150,6 +151,7 @@ export function LeadForm({ step, active, onStep }: { step: Step; active: boolean
       const errs = validateStep(step, p);
       if (Object.keys(errs).length > 0) { showErrors(errs); return; }
       setErrors({});
+      setSettling(true);
       onStep((step + 1) as Step);
       return;
     }
