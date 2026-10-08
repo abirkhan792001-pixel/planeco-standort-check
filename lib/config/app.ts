@@ -1,3 +1,5 @@
+/** Public production origin: fallback wherever a URL must work outside this deployment (mail images, Nominatim user agent). */
+export const PRODUCTION_BASE_URL = 'https://planeco-standort-check.vercel.app';
 export const PRIVACY_NOTICE_VERSION = '2026-09-v1';
 export const MIN_FILL_MS = 3000;
 export const DUPLICATE_WINDOW_DAYS = 90;

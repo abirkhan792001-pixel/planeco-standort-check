@@ -1,4 +1,5 @@
 import 'server-only';
+import { PRODUCTION_BASE_URL } from '@/lib/config/app';
 import { EnrichmentHttpError } from './errors';
 import { buildStructuredQuery, buildUserAgent, type StructuredAddress } from './query';
 import type { NominatimHit } from './types';
@@ -10,7 +11,7 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 async function politeGet(params: Record<string, string>): Promise<NominatimHit[]> {
   // Fail on a missing contact before reserving a slot or touching the network.
-  const userAgent = buildUserAgent(process.env.APP_BASE_URL ?? 'https://planeco-standort-check.vercel.app', process.env.NOMINATIM_CONTACT);
+  const userAgent = buildUserAgent(process.env.APP_BASE_URL ?? PRODUCTION_BASE_URL, process.env.NOMINATIM_CONTACT);
 
   // Reserve the slot synchronously (before any await): concurrent callers each get their own, ≥ 1.1 s apart.
   const slot = Math.max(Date.now(), lastRequestAt + MIN_GAP_MS);

@@ -83,10 +83,10 @@ See `.env.example`.
   - `email/` (Brevo, confirmation rules, MX check, fallback), `dashboard/` (filters, paged loading), `export/xlsx.ts`, `report.ts`, `maintenance/`, `labels.ts`
 - `supabase/migrations/` — schema, functions (`claim_lead`, `release_lead`, `set_lead_status`, `set_lead_note`), RLS, `0004`/`0005` additions.
 - `scripts/seed-samples.mjs` — the five case samples.
-- `tests/` — Vitest, 445 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
+- `tests/` — Vitest, 457 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
 
 ## Tested on
-Automated: `npm test` (445 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
+Automated: `npm test` (457 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
 
 Verified against production / the live database:
 - **Case samples (production, seeded via the real API):** all five stored and enriched as listed above — #1 house-level, PLZ mismatch (found 01097), Sachsen; #2 `address_unknown` + `ambiguous`, no coordinates; #3 street-level, PLZ mismatch (found 20255), DE-HH; #4 linked to #1 as duplicate (phone + address); #5 postcode-level, DE-SH, ~55 km from Hamburg. Test addresses were not mailed (`test_domain`). Re-running the seed replays (HTTP 200) and creates no new rows.
@@ -100,11 +100,11 @@ Verified against production / the live database:
 ### Manual checks (to be completed before submission)
 - [ ] iPhone Safari: form submits, success state readable without zooming
 - [ ] Android Chrome: same
-- [ ] Confirmation mail in Gmail — inbox or spam? (O-2)
+- [ ] Confirmation mail in Gmail — inbox or spam? Logo shown, prototype notice on top? (O-2)
 - [ ] Confirmation mail in GMX or web.de — inbox or spam? (O-2)
 - [ ] Two browsers, Vertrieb A and B: A claims, B gets "Bereits von … übernommen", B's status edit is disabled (C-2)
 - [ ] Expired session on the dashboard → redirect to login, no partial write (C-4)
 - [ ] Excel export opens with `+49 40 / 123 456` and `Groß Grönau` intact
 - [ ] Offline submit on a phone: German error, input stays in the form (F-8)
-- [ ] GitHub Actions keep-alive: first scheduled run is green (O-1)
+- [x] GitHub Actions keep-alive: first scheduled run is green (O-1) — daily runs 4–8 Oct green, `/api/health` answered `ok`
 - [ ] Browser Back and "Zurück" walk the form steps one at a time; the URL (with UTM parameters) stays unchanged.

@@ -1,5 +1,6 @@
-import { EMAIL_CLAIM_STALE_MINUTES, EMAIL_MAX_AGE_HOURS, MAX_EMAIL_ATTEMPTS, isReservedEmailDomain } from '@/lib/config/app';
+import { EMAIL_CLAIM_STALE_MINUTES, EMAIL_MAX_AGE_HOURS, MAX_EMAIL_ATTEMPTS, PRODUCTION_BASE_URL, isReservedEmailDomain } from '@/lib/config/app';
 import type { LeadRow } from '@/lib/leads/types';
+import { sanitizeDisplayName } from './errors';
 
 export type SendDecision =
   | { send: true }
@@ -32,10 +33,18 @@ export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
-const cap = (s: string | null | undefined, n: number) => (s ?? '').slice(0, n);
-
-/** Mail clients fetch the logo themselves, so it needs a public https URL (a localhost base falls back to production). */
-const DEFAULT_BASE_URL = 'https://planeco-standort-check.vercel.app';
+/**
+ * The name is the only lead input in the mail, under Planeco's full signature: line breaks would let a submitter
+ * write their own paragraphs, and a link-like name would turn the greeting into an ad, so both fall back to a plain greeting.
+ */
+function greetingName(lead: LeadRow): string {
+  const name = sanitizeDisplayName(lead.first_name ?? '', lead.last_name ?? '')
+    .replace(/[​-‍⁠﻿]/g, '')
+    .replace(/[\s\u0080-\u009f]+/g, ' ')
+    .trim();
+  // "x.de", "bit.ly/abc": mail clients link bare domains too. A false hit ("St.Pauli") only costs the name in the greeting.
+  return /:\/\/|www\.|@|[a-z0-9-]\.[a-z]{2,}/i.test(name) ? '' : name;
+}
 
 /** Planeco's own mail signature, as in their "Vielen Dank für Ihre Anfrage" auto-reply. */
 const SIGNATURE = {
@@ -46,8 +55,6 @@ const SIGNATURE = {
   website: 'www.planecobuilding.de',
   websiteHref: 'https://www.planecobuilding.de/',
   logoPath: '/brand/planeco-logo-mail.png',
-  /** Planeco's Calendly from the auto-reply, without the per-lead Salesforce parameters. */
-  bookingUrl: 'https://calendly.com/d/ds87-3jg-y64/planeco-kostenloses-erstgesprach-online-architekt',
   legal: [
     'Planeco Building GmbH | Brauhausstraße 19, 22041 Hamburg, DE | Geschäftsführung: Stefan Dietrich',
     'Handelsregistereintragung: Amtsgericht Hamburg HRB 177700 | USt-IdNr.: DE 357555071',
@@ -72,26 +79,31 @@ function httpsUrl(raw: string | undefined): URL | null {
 
 /** Deliberately does not render plot_note or any other free text. */
 export function renderConfirmation(lead: LeadRow): { subject: string; html: string; text: string } {
-  const name = `${cap(lead.first_name, 100)} ${cap(lead.last_name, 100)}`.trim();
-  const logoUrl = new URL(SIGNATURE.logoPath, httpsUrl(process.env.APP_BASE_URL) ?? DEFAULT_BASE_URL).href;
-  const bookingUrl = (httpsUrl(process.env.MAIL_BOOKING_URL) ?? new URL(SIGNATURE.bookingUrl)).href;
+  const name = greetingName(lead);
+  const greeting = name ? `Guten Tag ${name},` : 'Guten Tag,';
+  const baseUrl = httpsUrl(process.env.APP_BASE_URL) ?? new URL(PRODUCTION_BASE_URL);
+  const logoUrl = new URL(SIGNATURE.logoPath, baseUrl).href;
+  const privacyUrl = new URL('/datenschutz', baseUrl).href;
+  // Opt-in: a booking link books a real appointment, so without a valid https URL the line is left out.
+  const bookingUrl = httpsUrl(process.env.MAIL_BOOKING_URL)?.href ?? null;
   const subject = 'Planeco Building - Vielen Dank für Ihre Anfrage';
-  const footer = 'Diese Nachricht stammt aus einem Prototyp im Rahmen einer Case Study und ist keine verbindliche Anfrage bei der Planeco Building GmbH.';
+  const notice = 'Prototyp einer Case Study – Ihre Angaben wurden nicht an die Planeco Building GmbH übermittelt.';
+  const footer = 'Diese Nachricht stammt aus einem Prototyp im Rahmen einer Case Study. Ihre Angaben wurden nicht an die Planeco Building GmbH übermittelt. Verantwortlich und Datenschutz:';
 
   const intro = 'vielen Dank für Ihre Anfrage zum Standort-Check. Wir prüfen Lage und Genehmigungssituation Ihres Grundstücks und melden uns in der Regel am nächsten Werktag telefonisch bei Ihnen. In diesem Rahmen erhalten Sie Ihre kostenfreie Ersteinschätzung zu Ihrem Vorhaben.';
   const documents = 'Anschließend können Sie uns Unterlagen, z. B. vorhandene Pläne, zur Verfügung stellen und je nach Anliegen ein Angebot erhalten. Der Standort-Check sowie ein individuelles Angebot sind unverbindlich & kostenfrei.';
   const booking = ['Sie möchten sich den Zeitpunkt des Gesprächs aussuchen? Wählen Sie', 'einen Termin aus, zu dem Sie angerufen werden.'] as const;
 
   const text = [
-    `Guten Tag ${name},`,
+    notice,
+    '',
+    greeting,
     '',
     intro,
     '',
     documents,
     '',
-    `${booking[0]} hier ${booking[1]}`,
-    bookingUrl,
-    '',
+    ...(bookingUrl ? [`${booking[0]} hier ${booking[1]}`, bookingUrl, ''] : []),
     'Wir freuen uns auf Sie!',
     '',
     'Ihr Team von Planeco Building',
@@ -104,7 +116,7 @@ export function renderConfirmation(lead: LeadRow): { subject: string; html: stri
     ...SIGNATURE.legal,
     '',
     '—',
-    `Hinweis: ${footer}`,
+    `Hinweis: ${footer} ${privacyUrl}`,
   ].join('\n');
 
   const p = (inner: string, margin = '0 0 13px') => `<p style="margin:${margin};${BODY_FONT}">${inner}</p>`;
@@ -119,15 +131,16 @@ export function renderConfirmation(lead: LeadRow): { subject: string; html: stri
 <meta name="color-scheme" content="light">
 <meta name="supported-color-schemes" content="light">
 <title>${escapeHtml(subject)}</title>
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&amp;display=swap" rel="stylesheet">
+<!--[if mso]><style>p,td,a{font-family:Arial,Helvetica,sans-serif !important}</style><![endif]-->
 </head>
-<body style="margin:0;padding:0;background-color:#ffffff">
+<body style="background-color:#ffffff">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;background-color:#ffffff">
 <tr><td style="padding:0;${BODY_FONT}">
-${p(`Guten Tag ${escapeHtml(name)},`)}
+<p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;${small}">${escapeHtml(notice)}</p>
+${p(escapeHtml(greeting))}
 ${p(escapeHtml(intro))}
 ${p(escapeHtml(documents))}
-${p(`${escapeHtml(booking[0])} <a href="${escapeHtml(bookingUrl)}" style="color:${LINK};text-decoration:underline">hier</a> ${escapeHtml(booking[1])}`)}
+${bookingUrl ? p(`${escapeHtml(booking[0])} <a href="${escapeHtml(bookingUrl)}" style="color:${LINK};text-decoration:underline">hier</a> ${escapeHtml(booking[1])}`) : ''}
 ${p('Wir freuen uns auf Sie!', '0 0 29px')}
 ${p('Ihr Team von Planeco Building', '0')}
 ${sig(escapeHtml(SIGNATURE.company), `font-size:12pt;line-height:24px;font-weight:700;color:${INK}`, '11px 0 0')}
@@ -136,7 +149,7 @@ ${sig(`<a href="${SIGNATURE.phoneHref}" style="color:${GREY};text-decoration:non
 ${sig(`<a href="${SIGNATURE.websiteHref}" style="color:${INK};text-decoration:none">${SIGNATURE.website}</a>`, `font-size:10pt;line-height:20px;font-weight:700;color:${INK}`)}
 <p style="margin:12px 0 0;font-size:0;line-height:0"><img src="${escapeHtml(logoUrl)}" width="165" height="33" alt="Planeco Building" style="display:block;width:165px;height:33px;border:0;outline:none;text-decoration:none"></p>
 ${SIGNATURE.legal.map((line) => sig(escapeHtml(line), small)).join('\n')}
-${sig(`Hinweis: ${escapeHtml(footer)}`, small)}
+${sig(`Hinweis: ${escapeHtml(footer)} <a href="${escapeHtml(privacyUrl)}" style="color:${GREY};text-decoration:underline">Datenschutzhinweise</a>`, small)}
 </td></tr>
 </table>
 </body>
