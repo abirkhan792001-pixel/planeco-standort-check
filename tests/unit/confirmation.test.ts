@@ -36,20 +36,20 @@ describe('renderConfirmation', () => {
     expect(m.html).not.toContain('evil.example');
     expect(m.text).not.toContain('evil.example');
   });
-  it('summarizes the plot, or says it will be clarified', () => {
-    expect(renderConfirmation(makeLeadRow()).text).toContain('Hauptstraße 14, 01067 Dresden');
-    expect(renderConfirmation(makeLeadRow({ address_unknown: true, street: null, postal_code: null, city: null })).text).toContain('wird telefonisch geklärt');
+  it("follows Planeco's auto-reply without repeating the form data", () => {
+    const m = renderConfirmation(makeLeadRow({ project_type: 'neubau' }));
+    for (const s of ['Hauptstraße', '123 456', 'Neubau']) {
+      expect(m.html).not.toContain(s);
+      expect(m.text).not.toContain(s);
+    }
+    expect(m.text).toContain('Wir freuen uns auf Sie!');
   });
   it('greets neutrally and includes the demo footer', () => {
     const m = renderConfirmation(makeLeadRow());
-    expect(m.subject).toBe('Planeco Building - Vielen Dank für Ihre Anfrage zum Standort-Check');
+    expect(m.subject).toBe('Planeco Building - Vielen Dank für Ihre Anfrage');
     expect(m.text).toContain('Guten Tag Thomas Ahrens');
     expect(m.text).toContain('Case Study');
     expect(m.html).toContain('Case Study');
-  });
-  it('names the Vorhaben only when the lead chose one', () => {
-    expect(renderConfirmation(makeLeadRow({ project_type: 'neubau' })).text).toContain('Vorhaben: Neubau');
-    expect(renderConfirmation(makeLeadRow()).text).not.toContain('Vorhaben:');
   });
   it("carries Planeco's signature and legal footer in HTML and text", () => {
     const m = renderConfirmation(makeLeadRow());
@@ -73,11 +73,14 @@ describe('renderConfirmation', () => {
       expect(logo(renderConfirmation(makeLeadRow()).html)).toBe('https://planeco-standort-check.vercel.app/brand/planeco-logo-mail.png');
       expect(existsSync(path.resolve(process.cwd(), 'public/brand/planeco-logo-mail.png'))).toBe(true);
     });
-    it('shows the booking line only for an https booking URL', () => {
+    it("links Planeco's Calendly unless an https booking URL is configured", () => {
+      const planeco = 'https://calendly.com/d/ds87-3jg-y64/planeco-kostenloses-erstgesprach-online-architekt';
       vi.stubEnv('MAIL_BOOKING_URL', '');
-      expect(renderConfirmation(makeLeadRow()).text).not.toContain('Termin');
+      expect(renderConfirmation(makeLeadRow()).html).toContain(`<a href="${planeco}"`);
+      expect(renderConfirmation(makeLeadRow()).text).toContain(planeco);
       vi.stubEnv('MAIL_BOOKING_URL', 'javascript:alert(1)');
       expect(renderConfirmation(makeLeadRow()).html).not.toContain('javascript:');
+      expect(renderConfirmation(makeLeadRow()).html).toContain(`<a href="${planeco}"`);
       vi.stubEnv('MAIL_BOOKING_URL', 'https://calendly.com/example/erstgespraech?a=1&b=2');
       const m = renderConfirmation(makeLeadRow());
       expect(m.html).toContain('<a href="https://calendly.com/example/erstgespraech?a=1&amp;b=2"');
