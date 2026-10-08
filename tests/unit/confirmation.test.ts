@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 import { renderConfirmation, shouldSendConfirmation, escapeHtml, canAttemptEmail } from '@/lib/email/confirmation';
 import { makeLeadRow } from '../fixtures/lead-row';
 
@@ -40,9 +42,47 @@ describe('renderConfirmation', () => {
   });
   it('greets neutrally and includes the demo footer', () => {
     const m = renderConfirmation(makeLeadRow());
-    expect(m.subject).toBe('Ihre Anfrage zum kostenlosen Standort-Check');
+    expect(m.subject).toBe('Planeco Building - Vielen Dank für Ihre Anfrage zum Standort-Check');
     expect(m.text).toContain('Guten Tag Thomas Ahrens');
     expect(m.text).toContain('Case Study');
+    expect(m.html).toContain('Case Study');
+  });
+  it('names the Vorhaben only when the lead chose one', () => {
+    expect(renderConfirmation(makeLeadRow({ project_type: 'neubau' })).text).toContain('Vorhaben: Neubau');
+    expect(renderConfirmation(makeLeadRow()).text).not.toContain('Vorhaben:');
+  });
+  it("carries Planeco's signature and legal footer in HTML and text", () => {
+    const m = renderConfirmation(makeLeadRow());
+    expect(m.html).toContain('href="mailto:service@planecobuilding.de"');
+    expect(m.html).toContain('href="tel:+494022898891"');
+    expect(m.html).toContain('href="https://www.planecobuilding.de/"');
+    for (const s of ['Ihr Team von Planeco Building', 'Planeco Building GmbH', '+49 40 2289 8891', 'Amtsgericht Hamburg HRB 177700']) {
+      expect(m.html).toContain(s);
+      expect(m.text).toContain(s);
+    }
+  });
+
+  describe('links from the environment', () => {
+    afterEach(() => vi.unstubAllEnvs());
+    const logo = (html: string) => html.match(/<img src="([^"]+)" width="165" height="33" alt="Planeco Building"/)?.[1];
+
+    it('loads the logo from the deployment, falling back to production for a non-https base', () => {
+      vi.stubEnv('APP_BASE_URL', 'https://preview.example.dev');
+      expect(logo(renderConfirmation(makeLeadRow()).html)).toBe('https://preview.example.dev/brand/planeco-logo-mail.png');
+      vi.stubEnv('APP_BASE_URL', 'http://localhost:3000');
+      expect(logo(renderConfirmation(makeLeadRow()).html)).toBe('https://planeco-standort-check.vercel.app/brand/planeco-logo-mail.png');
+      expect(existsSync(path.resolve(process.cwd(), 'public/brand/planeco-logo-mail.png'))).toBe(true);
+    });
+    it('shows the booking line only for an https booking URL', () => {
+      vi.stubEnv('MAIL_BOOKING_URL', '');
+      expect(renderConfirmation(makeLeadRow()).text).not.toContain('Termin');
+      vi.stubEnv('MAIL_BOOKING_URL', 'javascript:alert(1)');
+      expect(renderConfirmation(makeLeadRow()).html).not.toContain('javascript:');
+      vi.stubEnv('MAIL_BOOKING_URL', 'https://calendly.com/example/erstgespraech?a=1&b=2');
+      const m = renderConfirmation(makeLeadRow());
+      expect(m.html).toContain('<a href="https://calendly.com/example/erstgespraech?a=1&amp;b=2"');
+      expect(m.text).toContain('https://calendly.com/example/erstgespraech?a=1&b=2');
+    });
   });
   it('escapeHtml covers quotes', () => expect(escapeHtml(`"'&`)).toBe('&quot;&#39;&amp;'));
 });

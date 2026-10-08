@@ -70,7 +70,7 @@ node scripts/seed-samples.mjs https://<your-deployment>
 
 ## Environment variables
 See `.env.example`.
-- **Server-only:** `SUPABASE_SECRET_KEY`, `BREVO_API_KEY`, `MAIL_SENDER_EMAIL`, `MAIL_SENDER_NAME`, `MAIL_REPLY_TO`, `FALLBACK_INBOX`, `CRON_SECRET`, `NOMINATIM_CONTACT` (required by the Nominatim usage policy), `PRIVACY_CONTACT_EMAIL`, `APP_BASE_URL`.
+- **Server-only:** `SUPABASE_SECRET_KEY`, `BREVO_API_KEY`, `MAIL_SENDER_EMAIL`, `MAIL_SENDER_NAME`, `MAIL_REPLY_TO`, `MAIL_BOOKING_URL` (optional), `FALLBACK_INBOX`, `CRON_SECRET`, `NOMINATIM_CONTACT` (required by the Nominatim usage policy), `PRIVACY_CONTACT_EMAIL`, `APP_BASE_URL`.
 - **Public:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CONTACT_PHONE`.
 - **GitHub Actions:** repository variable `APP_BASE_URL` for the keep-alive workflow.
 
@@ -83,10 +83,10 @@ See `.env.example`.
   - `email/` (Brevo, confirmation rules, MX check, fallback), `dashboard/` (filters, paged loading), `export/xlsx.ts`, `report.ts`, `maintenance/`, `labels.ts`
 - `supabase/migrations/` — schema, functions (`claim_lead`, `release_lead`, `set_lead_status`, `set_lead_note`), RLS, `0004`/`0005` additions.
 - `scripts/seed-samples.mjs` — the five case samples.
-- `tests/` — Vitest, 442 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
+- `tests/` — Vitest, 446 tests. Fixtures are the case samples and recorded real OpenPLZ/Nominatim responses; `tests/unit/edge-cases.test.ts` covers the edge-case list beyond the samples (duplicates, phone formats, email, addresses, abusive input, attribution).
 
 ## Tested on
-Automated: `npm test` (442 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
+Automated: `npm test` (446 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
 
 Verified against production / the live database:
 - **Case samples (production, seeded via the real API):** all five stored and enriched as listed above — #1 house-level, PLZ mismatch (found 01097), Sachsen; #2 `address_unknown` + `ambiguous`, no coordinates; #3 street-level, PLZ mismatch (found 20255), DE-HH; #4 linked to #1 as duplicate (phone + address); #5 postcode-level, DE-SH, ~55 km from Hamburg. Test addresses were not mailed (`test_domain`). Re-running the seed replays (HTTP 200) and creates no new rows.
