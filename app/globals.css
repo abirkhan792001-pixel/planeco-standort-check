@@ -11,11 +11,29 @@
   --color-muted: #5A6A62;
   /* Resting control boundaries (inputs, cards, chips): WCAG 1.4.11 non-text contrast >= 3:1 on cream, white and paper. */
   --color-line: #828F87;
+
+  /* Sales dashboard (design system: /dashboard/design-system). Surfaces, dividers and the hover shade of ink. */
+  --color-surface: #FFFFFF;
+  --color-hairline: #DCE1D5;
+  --color-ink-soft: #2F5751;
+  /* Verdict tones: each text colour reaches >= 4.5:1 on its wash. Never carry meaning by colour alone. */
+  --color-moss: #2E6A4C;
+  --color-moss-wash: #E2EEE5;
+  --color-ochre: #7A4E00;
+  --color-ochre-wash: #F5E8C4;
+  --color-brick: #93321F;
+  --color-brick-wash: #F6DFD9;
+  --color-slate: #2B5674;
+  --color-slate-wash: #E0E9F1;
+  --color-stone-wash: #E8EBE3;
 }
 
-/* Poppins comes from next/font (app/layout.tsx); used via `font-brand` on the public page only. */
+/* Poppins comes from next/font (app/layout.tsx); used via `font-brand` on the public page and dashboard titles.
+   Plex Sans/Mono come from next/font in the dashboard layout and the login page. */
 @theme inline {
   --font-brand: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-ui: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-data: var(--font-plex-mono), ui-monospace, monospace;
 }
 
 /* Site-plan illustration: the parcel outline draws itself once (the page's only animation). Needs pathLength="1". */
