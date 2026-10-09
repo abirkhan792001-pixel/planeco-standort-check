@@ -12,7 +12,7 @@
   /* Resting control boundaries (inputs, cards, chips): WCAG 1.4.11 non-text contrast >= 3:1 on cream, white and paper. */
   --color-line: #828F87;
 
-  /* Sales dashboard (design system: /dashboard/design-system). Surfaces, dividers and the hover shade of ink. */
+  /* Sales dashboard. Surfaces, dividers and the hover shade of ink. */
   --color-surface: #FFFFFF;
   --color-hairline: #DCE1D5;
   --color-ink-soft: #2F5751;
