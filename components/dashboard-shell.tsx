@@ -9,8 +9,8 @@ export function DashboardShell({ userName, signOut, children }: { userName: stri
     <div className={`${dashboardFonts} flex min-h-dvh flex-col bg-cream text-ink`}>
       <header className="flex h-14 items-center gap-4 bg-ink px-4 text-white sm:gap-6 sm:px-6">
         <div className="flex items-center gap-2.5">
-          <span className="grid size-8 place-items-center rounded-md bg-white"><PlanecoMark className="h-5 w-auto" /></span>
-          <span className="font-brand text-[15px] font-semibold leading-tight">Standort-Check
+          <span className="grid size-8 place-items-center rounded-md bg-white" title="Standort-Check · Vertrieb"><PlanecoMark className="h-5 w-auto" /></span>
+          <span className="hidden font-brand text-[15px] font-semibold leading-tight sm:block">Standort-Check
             <span className="block text-[11px] font-normal tracking-wide text-white/60">Vertrieb</span>
           </span>
         </div>

@@ -7,26 +7,29 @@ import type { LeadView } from '@/lib/leads/derive';
 import { CHANNEL_GROUPS, type ChannelGroup } from '@/lib/attribution/types';
 import { DISQUALIFY_REASONS, LEAD_STATUSES, type DisqualifyReason, type LeadStatus } from '@/lib/leads/types';
 import { DEVICE_LABELS, GEO_FLAG_LABELS, geoFlagTexts, mailStatusLabel, PROJECT_TYPE_LABELS, REACHABILITY_LABELS, REASON_LABELS, STATE_LABELS, STATUS_LABELS } from '@/lib/labels';
+import { DUPLICATE_WINDOW_DAYS } from '@/lib/config/app';
 import { formatBerlin } from '@/lib/format';
 import { claimLeadAction, releaseLeadAction, setNoteAction, setStatusAction, type ActionResult } from '@/app/dashboard/actions';
-import { AddressBadge, AreaBadge, MailBadge, StatusBadge } from './badges';
-import { Badge, Button, buttonClass, Chip, DistanceBar, Eyebrow, fieldClass } from './ui';
+import { AddressMatch, AREA_TONE, AreaVerdict, MailBadge, StatusBadge } from './badges';
+import { Badge, Button, buttonClass, Chip, Eyebrow, fieldClass, fieldClassSm, focusRing, Segmented } from './ui';
 
+/** The pipeline in reading order: open stages, then the three ways a lead ends. */
+const OPEN_STATUSES = ['neu', 'in_bearbeitung', 'qualifiziert'] as const satisfies readonly LeadStatus[];
+const CLOSED_STATUSES = ['gewonnen', 'nicht_qualifiziert', 'verloren'] as const satisfies readonly LeadStatus[];
 const AREA_OPTIONS = [
-  ['inside', 'Im Gebiet'], ['edge', 'Randlage'], ['unclear', 'Unklar'], ['outside', 'Außerhalb'], ['pending', 'Wird geprüft'],
+  ['inside', 'Im Gebiet'], ['edge', 'Randlage'], ['outside', 'Außerhalb'], ['unclear', 'Unklar'], ['pending', 'Wird geprüft'],
   ['failed', 'Prüfung fehlgeschlagen'],
 ] as const;
-const VIEW_OPTIONS = [
-  ['mine', 'Nur meine'], ['unassigned', 'Nicht zugewiesen'], ['hideTest', 'Testdaten ausblenden'], ['showSpam', 'Spam anzeigen'],
-  ['allSubmissions', 'Alle Einzelanfragen'],
-] as const;
+const OWNER_OPTIONS = [['all', 'Alle'], ['mine', 'Meine'], ['unassigned', 'Nicht zugewiesen']] as const;
+const LIST_OPTIONS = [['hideTest', 'Testdaten ausblenden'], ['showSpam', 'Spam anzeigen'], ['allSubmissions', 'Alle Einzelanfragen']] as const;
 /** Every sort key keeps a name: merged columns sort by their first key, the rest stay reachable via the sort select. */
 const SORT_LABELS: Record<SortKey, string> = {
-  created_at: 'Eingang', name: 'Name', phone: 'Telefon', plot: 'Grundstück', area: 'Gebiet', address: 'Adressgenauigkeit',
+  created_at: 'Eingang', name: 'Name', phone: 'Telefon', plot: 'Grundstück', area: 'Gebiet', address: 'Verortung',
   project: 'Vorhaben', reachability: 'Erreichbarkeit', channel: 'Kanal / Kampagne', status: 'Status', owner: 'Bearbeiter',
-  mail: 'Mail', group: 'Anfragen',
+  mail: 'Mail', group: 'Anzahl Einsendungen',
 };
-const COLUMN_COUNT = 9;
+const DUP_REASON: Record<string, string> = { email: 'E-Mail', phone: 'Telefon', address: 'Adresse' };
+const COLUMN_COUNT = 8;
 const UNEXPECTED_ERROR = 'Aktion fehlgeschlagen – bitte Seite neu laden.';
 const cell = 'px-3 py-3';
 const sub = 'mt-0.5 text-xs text-muted';
@@ -37,6 +40,26 @@ function osmLink(l: LeadView) {
   return `https://www.openstreetmap.org/?mlat=${l.geo_lat}&mlon=${l.geo_lon}#map=${zoom}/${l.geo_lat}/${l.geo_lon}`;
 }
 
+/** The plot as two lines: the street (or the free-text place when the address is unknown), then PLZ/Ort and state. */
+function placeLines(l: LeadView): { where: string; detail: string } {
+  const state = l.geo_state_code ? STATE_LABELS[l.geo_state_code] ?? l.geo_state_code : null;
+  if (l.address_unknown) {
+    return { where: l.plot_note || 'Adresse unbekannt', detail: [l.plot_note ? 'Adresse unbekannt' : null, state].filter(Boolean).join(' · ') };
+  }
+  const street = [l.street, l.house_number].filter(Boolean).join(' ');
+  const town = [l.postal_code, l.city].filter(Boolean).join(' ');
+  return { where: street || town || l.plotLabel, detail: [street ? town : null, state].filter(Boolean).join(' · ') };
+}
+
+function SearchIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted">
+      <circle cx="9" cy="9" r="5.5" /><path d="m13.2 13.2 3.8 3.8" />
+    </svg>
+  );
+}
+
 export function LeadTable({ views, currentUserId, truncated }: { views: LeadView[]; currentUserId: string; truncated: boolean }) {
   const router = useRouter();
   const [f, setF] = useState<Filters>(DEFAULT_FILTERS);
@@ -45,14 +68,18 @@ export function LeadTable({ views, currentUserId, truncated }: { views: LeadView
   const [pending, start] = useTransition();
 
   const rows = useMemo(() => sortRows(applyFilters(views, f, currentUserId), f.sort, f.dir), [views, f, currentUserId]);
-  // Chip counts: every other filter applied, the status filter itself left out (otherwise unpicked statuses read 0).
+  // Tab counts: every other filter applied, the status filter itself left out (otherwise the other tabs read 0).
   const statusCounts = useMemo(() => {
     const counts = new Map<LeadStatus, number>();
     for (const r of applyFilters(views, { ...f, statuses: [] }, currentUserId)) counts.set(r.status, (counts.get(r.status) ?? 0) + 1);
     return counts;
   }, [views, f, currentUserId]);
+  const totalCount = [...statusCounts.values()].reduce((a, b) => a + b, 0);
   // Export filters travel as hidden POST fields, never in a URL (the search text can contain names or phone numbers).
   const exportFields = useMemo(() => [...filtersToSearchParams(f).entries()], [f]);
+  const filtered = Boolean(f.q || f.statuses.length || f.areas.length || f.channelGroup || f.mine || f.unassigned
+    || f.hideTest || f.showSpam || f.allSubmissions);
+  const owner = f.mine ? 'mine' : f.unassigned ? 'unassigned' : 'all';
 
   const run = (action: () => Promise<ActionResult>, leadId?: string) =>
     start(async () => {
@@ -69,8 +96,8 @@ export function LeadTable({ views, currentUserId, truncated }: { views: LeadView
       }
     });
 
-  const th = (key: SortKey, label: string, className = '') => (
-    <th scope="col" className={`px-3 py-2.5 text-left ${className}`}
+  const th = (key: SortKey, label: string) => (
+    <th scope="col" className="px-3 py-2.5 text-left"
       aria-sort={f.sort === key ? (f.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button type="button" className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-muted hover:text-ink"
         onClick={() => setF((s) => ({ ...s, ...nextSort(s, key) }))}>
@@ -79,66 +106,96 @@ export function LeadTable({ views, currentUserId, truncated }: { views: LeadView
     </th>
   );
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
+  // One status at a time ("Alle" = none): the tabs read as the pipeline, not as a checklist.
+  const statusTab = (value: LeadStatus | null, label: string, count: number) => {
+    const active = value === null ? f.statuses.length === 0 : f.statuses.length === 1 && f.statuses[0] === value;
+    return (
+      <button key={value ?? 'all'} type="button" aria-pressed={active} onClick={() => setF({ ...f, statuses: value === null ? [] : [value] })}
+        className={`relative inline-flex h-11 shrink-0 items-center gap-1.5 px-3 text-sm transition-colors ${focusRing} ${
+          active ? 'font-medium text-ink after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-ink'
+            : 'text-muted hover:text-ink'}`}>
+        {label}
+        <span className={`min-w-5 rounded-full px-1.5 text-center font-data text-[11px] leading-5 tabular-nums ${
+          active ? 'bg-ink text-white' : count > 0 ? 'bg-stone-wash text-ink' : 'text-muted'}`}>{count}</span>
+      </button>
+    );
+  };
 
   return (
-    <div className="space-y-4">
-      <section aria-label="Filter" className="space-y-3 rounded-lg border border-hairline bg-surface p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <label htmlFor="lead-search" className="sr-only">Suche nach Name, E-Mail, Telefon oder PLZ</label>
-          <input id="lead-search" type="search" placeholder="Name, E-Mail, Telefon oder PLZ suchen" className={`${fieldClass} w-full sm:w-80`}
-            value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
-          <label className="flex items-center gap-2 text-sm text-muted">Kanal
-            <select className={fieldClass} value={f.channelGroup ?? ''}
+    <div className="space-y-3">
+      <section aria-label="Filter" className="rounded-lg border border-hairline bg-surface">
+        <div className="flex items-center gap-3 border-b border-hairline pr-3">
+          <div className="flex min-w-0 items-center overflow-x-auto px-1.5" role="group" aria-label="Status">
+            {statusTab(null, 'Alle', totalCount)}
+            {OPEN_STATUSES.map((s) => statusTab(s, STATUS_LABELS[s], statusCounts.get(s) ?? 0))}
+            <span aria-hidden="true" className="mx-1.5 h-5 w-px shrink-0 bg-hairline" />
+            {CLOSED_STATUSES.map((s) => statusTab(s, STATUS_LABELS[s], statusCounts.get(s) ?? 0))}
+          </div>
+          <form method="post" action="/dashboard/export" className="ml-auto shrink-0">
+            {exportFields.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
+            <button type="submit" className={buttonClass('secondary')} title="Exportiert die aktuell gefilterte Liste">
+              <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-4">
+                <path d="M10 3.5v9m0 0-3.5-3.5M10 12.5l3.5-3.5M4 16h12" />
+              </svg>
+              <span className="sr-only sm:not-sr-only">Export (.xlsx)</span>
+            </button>
+          </form>
+        </div>
+
+        <div className="space-y-3 p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-80">
+              <label htmlFor="lead-search" className="sr-only">Suche nach Name, E-Mail, Telefon oder PLZ</label>
+              <SearchIcon />
+              <input id="lead-search" type="search" placeholder="Name, E-Mail, Telefon oder PLZ" className={`${fieldClass} w-full pl-8`}
+                value={f.q} onChange={(e) => setF({ ...f, q: e.target.value })} />
+            </div>
+            <label htmlFor="lead-channel" className="sr-only">Kanal</label>
+            <select id="lead-channel" className={fieldClass} value={f.channelGroup ?? ''}
               onChange={(e) => setF({ ...f, channelGroup: (e.target.value || null) as ChannelGroup | null })}>
               <option value="">Alle Kanäle</option>
               {CHANNEL_GROUPS.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
-          </label>
-          <div className="flex items-center gap-1">
-            <label className="flex items-center gap-2 text-sm text-muted">Sortieren
-              <select className={fieldClass} value={f.sort} onChange={(e) => setF({ ...f, ...nextSort(f, e.target.value as SortKey) })}>
-                {Object.entries(SORT_LABELS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-              </select>
-            </label>
-            <button type="button" className={`${buttonClass('secondary', 'md')} w-9 px-0`}
-              aria-label={f.dir === 'asc' ? 'Aufsteigend sortiert – umkehren' : 'Absteigend sortiert – umkehren'}
-              onClick={() => setF({ ...f, dir: f.dir === 'asc' ? 'desc' : 'asc' })}>
-              <span aria-hidden="true">{f.dir === 'asc' ? '↑' : '↓'}</span>
-            </button>
+            <div className="flex items-center gap-2 sm:ml-auto">
+              <Eyebrow>Zuständig</Eyebrow>
+              <Segmented label="Zuständig" value={owner} options={OWNER_OPTIONS}
+                onChange={(v) => setF({ ...f, mine: v === 'mine', unassigned: v === 'unassigned' })} />
+            </div>
           </div>
-          <form method="post" action="/dashboard/export" className="sm:ml-auto">
-            {exportFields.map(([name, value]) => <input key={name} type="hidden" name={name} value={value} />)}
-            <button type="submit" className={buttonClass('primary', 'md')}>Export (.xlsx)</button>
-          </form>
-        </div>
-
-        <div className="grid gap-x-4 gap-y-2 sm:grid-cols-[5.5rem_1fr] sm:items-center">
-          <Eyebrow>Status</Eyebrow>
-          <div className="flex flex-wrap gap-1.5">
-            {LEAD_STATUSES.map((s) => (
-              <Chip key={s} pressed={f.statuses.includes(s)} count={statusCounts.get(s) ?? 0}
-                onClick={() => setF({ ...f, statuses: toggle(f.statuses, s) })}>{STATUS_LABELS[s]}</Chip>
-            ))}
-          </div>
-          <Eyebrow>Gebiet</Eyebrow>
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Gebiet">
+            <Eyebrow className="mr-1.5">Gebiet</Eyebrow>
             {AREA_OPTIONS.map(([v, label]) => (
-              <Chip key={v} pressed={f.areas.includes(v)} onClick={() => setF({ ...f, areas: toggle(f.areas, v) })}>{label}</Chip>
-            ))}
-          </div>
-          <Eyebrow>Ansicht</Eyebrow>
-          <div className="flex flex-wrap gap-1.5">
-            {VIEW_OPTIONS.map(([k, label]) => (
-              <Chip key={k} pressed={f[k]} onClick={() => setF({ ...f, [k]: !f[k] })}>{label}</Chip>
+              <Chip key={v} pressed={f.areas.includes(v)} dot={AREA_TONE[v]} onClick={() => setF({ ...f, areas: toggle(f.areas, v) })}>{label}</Chip>
             ))}
           </div>
         </div>
       </section>
 
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted">
-        <span><span className="font-data text-sm font-medium text-ink tabular-nums">{rows.length}</span> Anfragen</span>
-        <span>Export dient der Auswertung – bitte in der Liste übernehmen, um Doppelarbeit zu vermeiden.</span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-[13px] text-muted">
+        <span><span className="font-data font-medium text-ink tabular-nums">{rows.length}</span> {rows.length === 1 ? 'Anfrage' : 'Anfragen'}</span>
+        <span className="flex items-center gap-1.5">
+          <label htmlFor="lead-sort">sortiert nach</label>
+          <select id="lead-sort" className={fieldClassSm} value={f.sort} onChange={(e) => setF({ ...f, ...nextSort(f, e.target.value as SortKey) })}>
+            {Object.entries(SORT_LABELS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+          </select>
+          <button type="button" className={`${buttonClass('secondary')} h-7 w-7 px-0`}
+            aria-label={f.dir === 'asc' ? 'Aufsteigend sortiert – umkehren' : 'Absteigend sortiert – umkehren'}
+            onClick={() => setF({ ...f, dir: f.dir === 'asc' ? 'desc' : 'asc' })}>
+            <span aria-hidden="true">{f.dir === 'asc' ? '↑' : '↓'}</span>
+          </button>
+        </span>
+        {filtered && (
+          <button type="button" className={`text-ink underline underline-offset-2 hover:no-underline ${focusRing}`}
+            onClick={() => setF({ ...DEFAULT_FILTERS, sort: f.sort, dir: f.dir })}>Filter zurücksetzen</button>
+        )}
         {truncated && <span className="font-medium text-ochre">Es werden die neuesten 1&nbsp;000 Anfragen angezeigt.</span>}
+        <span className="flex flex-wrap gap-x-4 gap-y-1 sm:ml-auto">
+          {LIST_OPTIONS.map(([k, label]) => (
+            <label key={k} className="inline-flex items-center gap-1.5 hover:text-ink">
+              <input type="checkbox" className="size-3.5 accent-ink" checked={f[k]} onChange={() => setF({ ...f, [k]: !f[k] })} />{label}
+            </label>
+          ))}
+        </span>
       </div>
 
       {toast && (
@@ -158,7 +215,7 @@ export function LeadTable({ views, currentUserId, truncated }: { views: LeadView
           <thead className="border-b border-hairline bg-paper">
             <tr>
               {th('created_at', 'Eingang')}{th('name', 'Interessent')}{th('area', 'Standort')}{th('project', 'Vorhaben')}
-              {th('channel', 'Kanal')}{th('status', 'Status')}{th('mail', 'Mail')}{th('group', 'Anfr.', 'text-center')}
+              {th('channel', 'Kanal')}{th('status', 'Status')}{th('mail', 'Mail')}
               <th scope="col" className="px-3 py-2.5"><span className="sr-only">Aktionen</span></th>
             </tr>
           </thead>
@@ -182,6 +239,7 @@ export function LeadTable({ views, currentUserId, truncated }: { views: LeadView
           </tbody>
         </table>
       </div>
+      <p className="px-1 text-xs text-muted">Export dient der Auswertung – bitte in der Liste übernehmen, um Doppelarbeit zu vermeiden.</p>
     </div>
   );
 }
@@ -198,6 +256,7 @@ function FragmentRow(props: {
   const flags = geoFlagTexts(l);
   const mailHint = mailStatusLabel(l).title;
   const [date, time] = formatBerlin(l.created_at).split(' ');
+  const place = placeLines(l);
   return (
     <>
       <tr className={`border-t border-hairline align-top first:border-t-0 ${props.open ? 'bg-paper' : 'hover:bg-paper/70'}`}>
@@ -205,25 +264,34 @@ function FragmentRow(props: {
           {date}<div className="text-muted">{time}</div>
           {l.is_test && <div className="mt-1"><Badge tone="grey">Test</Badge></div>}
         </td>
-        <td className={`${cell} min-w-48`}>
-          <div className="font-medium text-ink">{l.first_name} {l.last_name}</div>
+        <td className={`${cell} min-w-52`}>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="font-medium text-ink">{l.first_name} {l.last_name}</span>
+            {l.groupSize > 1 && (
+              <Badge tone="blue" title={`${l.groupSize} Einsendungen derselben Person (gleiche E-Mail, Telefonnummer oder Adresse innerhalb von ${DUPLICATE_WINDOW_DAYS} Tagen), hier zu einer Anfrage zusammengefasst. „Alle Einzelanfragen“ zeigt jede einzeln.`}>
+                {l.groupSize}× angefragt
+              </Badge>
+            )}
+          </div>
           <a href={`tel:${l.phone_e164 ?? l.phone_raw}`} className="font-data text-[13px] text-ink underline decoration-line underline-offset-2 hover:decoration-ink">{l.phone_raw}</a>
           {l.phone_extension && <span className="ml-1 text-xs text-muted">Durchwahl {l.phone_extension}</span>}
           <div className="break-all text-xs text-muted">{l.email}</div>
-          {l.duplicate_of && <div className={sub}>Duplikat ({(l.duplicate_reason ?? []).join(', ')})</div>}
+          {l.duplicate_of && <div className={sub}>Wiederholte Einsendung (gleiche {(l.duplicate_reason ?? []).map((r) => DUP_REASON[r] ?? r).join(', ')})</div>}
           {l.related_lead_id && <div className={sub}>früherer Kontakt</div>}
         </td>
-        <td className={`${cell} min-w-64`}>
-          <div className="text-ink">{l.plotLabel}</div>
+        <td className={`${cell} w-72 min-w-60`}>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="line-clamp-2 font-medium text-ink" title={place.where}>{place.where}</span>
+            {map && (
+              <a href={map} target="_blank" rel="noopener" className="shrink-0 text-xs text-muted underline-offset-2 hover:text-ink hover:underline">
+                Karte<span aria-hidden="true"> ↗</span><span className="sr-only"> (OpenStreetMap, neuer Tab)</span>
+              </a>
+            )}
+          </div>
+          {place.detail && <div className={sub}>{place.detail}</div>}
+          <div className="mt-2"><AreaVerdict area={l.area} /></div>
+          <div className="mt-0.5 text-xs text-muted">Verortung: <AddressMatch lead={l} /></div>
           {l.geo_flags.includes('cadastral_only') && <div className="mt-0.5 text-xs font-medium text-ochre">{GEO_FLAG_LABELS.cadastral_only}</div>}
-          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <AreaBadge area={l.area} /><AddressBadge lead={l} />
-          </div>
-          <DistanceBar area={l.area} />
-          <div className={sub}>
-            {l.geo_state_code && <>{STATE_LABELS[l.geo_state_code] ?? l.geo_state_code}{l.geo_district ? ` · ${l.geo_district}` : ''}</>}
-            {map && <>{l.geo_state_code ? ' · ' : ''}<a href={map} target="_blank" rel="noopener" className="underline underline-offset-2 hover:text-ink">Karte</a></>}
-          </div>
         </td>
         <td className={cell}>
           {l.project_type ? PROJECT_TYPE_LABELS[l.project_type] : '—'}
@@ -236,9 +304,6 @@ function FragmentRow(props: {
           <div className={sub}>{l.ownerName ?? 'Nicht zugewiesen'}</div>
         </td>
         <td className={cell}><MailBadge lead={l} /></td>
-        <td className={`${cell} text-center font-data tabular-nums`}>
-          {l.groupSize > 1 ? <Badge tone="blue">{l.groupSize}</Badge> : <span className="text-muted">{l.groupSize}</span>}
-        </td>
         <td className={`${cell} whitespace-nowrap text-right`}>
           <div className="inline-flex gap-1.5">
             {!l.assigned_to && <Button variant="confirm" disabled={props.pending} onClick={props.onClaim}>Übernehmen</Button>}
@@ -259,7 +324,10 @@ function FragmentRow(props: {
               </div>
               <div>
                 <dt><Eyebrow>Gemeinde</Eyebrow></dt>
-                <dd className="mt-0.5">{l.geo_municipality ?? '—'} {l.geo_municipality_key && <span className="font-data text-xs text-muted">AGS {l.geo_municipality_key}</span>}</dd>
+                <dd className="mt-0.5">
+                  {l.geo_municipality ?? '—'} {l.geo_municipality_key && <span className="font-data text-xs text-muted">AGS {l.geo_municipality_key}</span>}
+                  {l.geo_district && <div className="text-xs text-muted">Kreis {l.geo_district}</div>}
+                </dd>
               </div>
               {flags.length > 0 && <div className="md:col-span-3"><dt><Eyebrow>Adress-Hinweise</Eyebrow></dt><dd className="mt-0.5 font-medium text-ochre">{flags.join(' · ')}</dd></div>}
               {mailHint && <div className="md:col-span-3"><dt><Eyebrow>Mail-Hinweis</Eyebrow></dt><dd className="mt-0.5">{mailHint}</dd></div>}

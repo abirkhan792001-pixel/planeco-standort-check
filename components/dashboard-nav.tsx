@@ -7,7 +7,6 @@ import { focusRing } from './ui';
 const LINKS = [
   { href: '/dashboard', label: 'Anfragen' },
   { href: '/dashboard/report', label: 'Kanäle' },
-  { href: '/dashboard/design-system', label: 'Designsystem' },
 ] as const;
 
 /** Header tabs. The active tab gets a terracotta underline (decoration) plus aria-current (meaning). */

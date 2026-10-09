@@ -4,7 +4,7 @@ import type { AreaAssessment } from '@/lib/geo/service-area';
 import type { LabelTone } from '@/lib/labels';
 
 /**
- * Dashboard design system primitives (shown on /dashboard/design-system). Class maps instead of a variant library: every
+ * Dashboard design system primitives. Class maps instead of a variant library: every
  * variant is a plain string, so the classes stay greppable and Tailwind sees them.
  */
 
@@ -30,27 +30,51 @@ export function Button({ variant, size, className = '', ...props }: ButtonHTMLAt
 
 /** Text inputs and selects share one height and boundary so a filter row lines up. */
 export const fieldClass = `h-9 rounded-md border border-line bg-surface px-2.5 text-sm text-ink placeholder:text-muted ${focusRing}`;
-
-/** A toggle filter. aria-pressed carries the state; the check mark repeats it without colour. */
-export function Chip({ pressed, count, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { pressed: boolean; count?: number }) {
-  return (
-    <button type="button" aria-pressed={pressed}
-      className={`inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-[13px] transition-colors ${focusRing} ${
-        pressed ? 'border-ink bg-ink text-white' : 'border-line bg-surface text-ink hover:bg-cream'}`}
-      {...props}>
-      {pressed && <span aria-hidden="true">✓</span>}
-      {children}
-      {count !== undefined && (
-        <span className={`font-data text-xs tabular-nums ${pressed ? 'text-white/80' : 'text-muted'}`}>{count}</span>
-      )}
-    </button>
-  );
-}
+/** The same field one step smaller, for controls inside a line of text (e.g. "sortiert nach"). */
+export const fieldClassSm = `h-7 rounded-md border border-line bg-surface px-1.5 text-[13px] text-ink ${focusRing}`;
 
 export const toneClass: Record<LabelTone, string> = {
   green: 'bg-moss-wash text-moss', amber: 'bg-ochre-wash text-ochre', red: 'bg-brick-wash text-brick',
   grey: 'bg-stone-wash text-muted', blue: 'bg-slate-wash text-slate',
 };
+/** Tone as text colour only (on white or paper; every value reaches >= 4.5:1). */
+export const toneText: Record<LabelTone, string> = {
+  green: 'text-moss', amber: 'text-ochre', red: 'text-brick', grey: 'text-muted', blue: 'text-slate',
+};
+/** Tone as a solid dot, for legends and filter chips. */
+export const toneDot: Record<LabelTone, string> = {
+  green: 'bg-moss', amber: 'bg-ochre', red: 'bg-brick', grey: 'bg-line', blue: 'bg-slate',
+};
+
+/** A toggle filter. aria-pressed carries the state; pressed fills the chip (a luminance change, not only a hue). */
+export function Chip({ pressed, dot, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { pressed: boolean; dot?: LabelTone }) {
+  return (
+    <button type="button" aria-pressed={pressed}
+      className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition-colors ${focusRing} ${
+        pressed ? 'border-ink bg-ink text-white' : 'border-hairline bg-surface text-ink hover:border-line'}`}
+      {...props}>
+      {dot && <span aria-hidden="true" className={`size-2 rounded-full ${toneDot[dot]} ${pressed ? 'ring-1 ring-white/70' : ''}`} />}
+      {children}
+    </button>
+  );
+}
+
+/** One choice out of a few (radio semantics without a form): a bordered strip of buttons. */
+export function Segmented<T extends string>({ label, value, options, onChange }: {
+  label: string; value: T; options: readonly (readonly [T, string])[]; onChange: (v: T) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="inline-flex rounded-md border border-hairline bg-paper p-0.5">
+      {options.map(([v, text]) => (
+        <button key={v} type="button" aria-pressed={value === v} onClick={() => onChange(v)}
+          className={`h-6 rounded px-2.5 text-[13px] transition-colors ${focusRing} ${
+            value === v ? 'bg-surface font-medium text-ink shadow-[0_0_0_1px_var(--color-hairline)]' : 'text-muted hover:text-ink'}`}>
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function Badge({ tone, title, children }: { tone: LabelTone; title?: string; children: React.ReactNode }) {
   return (
@@ -76,11 +100,11 @@ export function DistanceBar({ area }: { area: AreaAssessment }) {
   if (area.distanceKm === undefined || !area.hub) return null;
   const { radiusKm, edgeBandKm } = SERVICE_AREA;
   const dot = area.verdict === 'inside' ? 'bg-moss' : area.verdict === 'edge' ? 'bg-ochre' : 'bg-brick';
-  // The km figure is in the area badge next to the bar; here it is only spoken.
+  // Decorative: the verdict and the km figure stand next to it as text.
   return (
-    <span role="img" aria-label={`${area.distanceKm} km bis ${area.hub}, Einsatzradius ${radiusKm} km`}
-      className="block py-1">
-      <span className="relative block h-1.5 w-28 rounded-full bg-brick-wash">
+    <span aria-hidden="true" title={`Einsatzradius ${radiusKm} km, Randlage bis ${radiusKm + edgeBandKm} km`}
+      className="inline-flex shrink-0 items-center py-1">
+      <span className="relative block h-1.5 w-16 rounded-full bg-brick-wash">
         <span className="absolute inset-y-0 left-0 rounded-l-full bg-moss-wash" style={{ width: pctOf(radiusKm) }} />
         <span className="absolute inset-y-0 bg-ochre-wash" style={{ left: pctOf(radiusKm), width: pctOf(edgeBandKm) }} />
         <span className="absolute -inset-y-0.5 w-px bg-line" style={{ left: pctOf(radiusKm) }} />
