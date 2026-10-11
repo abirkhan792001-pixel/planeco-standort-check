@@ -12,6 +12,7 @@ import { DUPLICATE_WINDOW_DAYS, LIVE_REFRESH_SECONDS } from '@/lib/config/app';
 import { formatBerlin } from '@/lib/format';
 import { claimLeadAction, releaseLeadAction, setNoteAction, setStatusAction, type ActionResult } from '@/app/dashboard/actions';
 import { AddressMatch, AREA_TONE, AreaVerdict, MailBadge, STATUS_TONE, StatusBadge } from './badges';
+import { LeadHistory } from './lead-history';
 import { Badge, Button, buttonClass, Chip, Eyebrow, fieldClass, fieldClassSm, focusRing, Segmented, toneClass, toneText } from './ui';
 
 /** The pipeline in reading order: open stages, then the three ways a lead ends. */
@@ -178,6 +179,46 @@ function StatusControl({ lead, mine, pending, onStatus }: {
           )}
         </div>
       ) : reasonText}
+    </div>
+  );
+}
+
+/** tel: link for a lead: the E.164 number when known, else the typed one without spaces or slashes (dialers choke on them). */
+function telHref(l: Pick<LeadView, 'phone_e164' | 'phone_raw'>): string {
+  return `tel:${(l.phone_e164 ?? l.phone_raw).replace(/[^\d+]/g, '')}`;
+}
+
+function PhoneIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" className="size-3.5">
+      <path d="M5.2 3.5h2.3l1.2 3.2-1.6 1.1a8.6 8.6 0 0 0 4.1 4.1l1.1-1.6 3.2 1.2v2.3a1.7 1.7 0 0 1-1.8 1.7A12.4 12.4 0 0 1 3.5 5.3a1.7 1.7 0 0 1 1.7-1.8Z" />
+    </svg>
+  );
+}
+
+/**
+ * "Zuständig" in Details. Releasing is deliberately one step away from the row and asks first: it hands the lead back
+ * to the open list (and turns "In Bearbeitung" back into "Neu", see release_lead in 0002_functions.sql).
+ */
+function Ownership({ lead, mine, pending, onRelease }: { lead: LeadView; mine: boolean; pending: boolean; onRelease: () => void }) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <div>
+      <Eyebrow>Zuständig</Eyebrow>
+      <p className="mt-0.5 text-sm">
+        {lead.ownerName ?? 'Nicht zugewiesen'}
+        {lead.assigned_at && <span className="text-xs text-muted"> · seit <span className="font-data">{formatBerlin(lead.assigned_at)}</span></span>}
+      </p>
+      {mine && !confirming && <Button className="mt-2" onClick={() => setConfirming(true)}>Anfrage freigeben</Button>}
+      {mine && confirming && (
+        <div role="group" aria-label="Freigeben bestätigen" className="mt-2 rounded-md border border-ochre/40 bg-ochre-wash p-2.5 text-xs text-ink">
+          <p>Die Anfrage geht zurück in die offene Liste{lead.status === 'in_bearbeitung' ? ' und steht wieder auf „Neu“' : ''}.</p>
+          <div className="mt-2 flex gap-1.5">
+            <Button variant="primary" disabled={pending} onClick={onRelease}>Freigeben</Button>
+            <Button variant="ghost" onClick={() => setConfirming(false)}>Abbrechen</Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -456,7 +497,7 @@ function FragmentRow(props: {
               </Badge>
             )}
           </div>
-          <a href={`tel:${l.phone_e164 ?? l.phone_raw}`} className="font-data text-[13px] text-ink underline decoration-line underline-offset-2 hover:decoration-ink">{l.phone_raw}</a>
+          <a href={telHref(l)} className="font-data text-[13px] text-ink underline decoration-line underline-offset-2 hover:decoration-ink">{l.phone_raw}</a>
           {l.phone_extension && <span className="ml-1 text-xs text-muted">Durchwahl {l.phone_extension}</span>}
           <CallTimes lead={l} now={props.now} />
           <div className="mt-0.5 break-all text-xs text-muted">{l.email}</div>
@@ -488,9 +529,14 @@ function FragmentRow(props: {
         </td>
         <td className={`${cell} whitespace-nowrap text-right`}>
           <div className="inline-flex gap-1.5">
-            {!l.assigned_to && <Button variant="confirm" disabled={props.pending} onClick={props.onClaim}>Übernehmen</Button>}
-            {l.assigned_to && !props.mine && <Button disabled={props.pending} onClick={props.onClaim}>Übernehmen</Button>}
-            {props.mine && <Button disabled={props.pending} onClick={props.onRelease}>Freigeben</Button>}
+            {/* Own lead: calling is the next step (release lives in Details). Otherwise: claim first, to avoid double calls. */}
+            {props.mine ? (
+              <a href={telHref(l)} className={buttonClass('confirm')} aria-label={`${l.first_name} ${l.last_name} anrufen: ${l.phone_raw}`}>
+                <PhoneIcon />Anrufen
+              </a>
+            ) : (
+              <Button variant={l.assigned_to ? 'secondary' : 'confirm'} disabled={props.pending} onClick={props.onClaim}>Übernehmen</Button>
+            )}
             <Button variant="ghost" onClick={props.onToggle} aria-expanded={props.open}>{props.open ? 'Schließen' : 'Details'}</Button>
           </div>
         </td>
@@ -498,37 +544,45 @@ function FragmentRow(props: {
       {props.open && (
         <tr className="bg-paper">
           <td colSpan={COLUMN_COUNT} className="border-t border-dashed border-hairline px-4 pb-5 pt-3">
-            <dl className="grid gap-x-6 gap-y-3 text-sm md:grid-cols-3">
-              <div><dt><Eyebrow>Angaben</Eyebrow></dt><dd className="mt-0.5">{l.plot_note || '—'}</dd></div>
+            <div className="grid gap-x-8 gap-y-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
               <div>
-                <dt><Eyebrow>Quelle</Eyebrow></dt>
-                <dd className="mt-0.5">{[l.utm_source, l.utm_medium, l.utm_campaign].filter(Boolean).join(' / ') || '—'}{l.gclid ? ' · gclid' : ''}{l.fbclid ? ' · fbclid' : ''} · {l.device_type ? DEVICE_LABELS[l.device_type] : '—'}</dd>
-              </div>
-              <div>
-                <dt><Eyebrow>Gemeinde</Eyebrow></dt>
-                <dd className="mt-0.5">
-                  {l.geo_municipality ?? '—'} {l.geo_municipality_key && <span className="font-data text-xs text-muted">AGS {l.geo_municipality_key}</span>}
-                  {l.geo_district && <div className="text-xs text-muted">Kreis {l.geo_district}</div>}
-                </dd>
-              </div>
-              {flags.length > 0 && <div className="md:col-span-3"><dt><Eyebrow>Adress-Hinweise</Eyebrow></dt><dd className="mt-0.5 font-medium text-ochre">{flags.join(' · ')}</dd></div>}
-              <div className="md:col-span-3">
-                <dt><Eyebrow>Bestätigungsmail</Eyebrow></dt>
-                <dd className="mt-0.5 flex flex-wrap items-center gap-2"><MailBadge lead={l} />{mail.title && <span className="text-xs text-muted">{mail.title}</span>}</dd>
-              </div>
-              {Array.isArray(l.geo_candidates) && (
-                <div className="md:col-span-3"><dt><Eyebrow>Kandidaten</Eyebrow></dt>
-                  <dd className="mt-0.5">{(l.geo_candidates as { label: string; stateCode: string | null }[]).map((c) => `${c.label} (${c.stateCode ?? '?'})`).join(' · ')}</dd>
+                <dl className="grid gap-x-6 gap-y-3 text-sm md:grid-cols-3">
+                  <div><dt><Eyebrow>Angaben</Eyebrow></dt><dd className="mt-0.5">{l.plot_note || '—'}</dd></div>
+                  <div>
+                    <dt><Eyebrow>Quelle</Eyebrow></dt>
+                    <dd className="mt-0.5">{[l.utm_source, l.utm_medium, l.utm_campaign].filter(Boolean).join(' / ') || '—'}{l.gclid ? ' · gclid' : ''}{l.fbclid ? ' · fbclid' : ''} · {l.device_type ? DEVICE_LABELS[l.device_type] : '—'}</dd>
+                  </div>
+                  <div>
+                    <dt><Eyebrow>Gemeinde</Eyebrow></dt>
+                    <dd className="mt-0.5">
+                      {l.geo_municipality ?? '—'} {l.geo_municipality_key && <span className="font-data text-xs text-muted">AGS {l.geo_municipality_key}</span>}
+                      {l.geo_district && <div className="text-xs text-muted">Kreis {l.geo_district}</div>}
+                    </dd>
+                  </div>
+                  {flags.length > 0 && <div className="md:col-span-3"><dt><Eyebrow>Adress-Hinweise</Eyebrow></dt><dd className="mt-0.5 font-medium text-ochre">{flags.join(' · ')}</dd></div>}
+                  <div className="md:col-span-3">
+                    <dt><Eyebrow>Bestätigungsmail</Eyebrow></dt>
+                    <dd className="mt-0.5 flex flex-wrap items-center gap-2"><MailBadge lead={l} />{mail.title && <span className="text-xs text-muted">{mail.title}</span>}</dd>
+                  </div>
+                  {Array.isArray(l.geo_candidates) && (
+                    <div className="md:col-span-3"><dt><Eyebrow>Kandidaten</Eyebrow></dt>
+                      <dd className="mt-0.5">{(l.geo_candidates as { label: string; stateCode: string | null }[]).map((c) => `${c.label} (${c.stateCode ?? '?'})`).join(' · ')}</dd>
+                    </div>
+                  )}
+                </dl>
+                <div className="mt-4 border-t border-hairline pt-4">
+                  <div className="flex items-end gap-2 text-sm">
+                    <label className="flex flex-1 flex-col gap-1"><Eyebrow>Notiz</Eyebrow>
+                      <textarea className={`${fieldClass} h-auto py-1.5`} rows={2} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} />
+                    </label>
+                    <Button size="md" disabled={props.pending} onClick={() => props.onNote(note)}>Notiz speichern</Button>
+                  </div>
                 </div>
-              )}
-            </dl>
-            <div className="mt-4 border-t border-hairline pt-4">
-              <div className="flex items-end gap-2 text-sm">
-                <label className="flex flex-1 flex-col gap-1"><Eyebrow>Notiz</Eyebrow>
-                  <textarea className={`${fieldClass} h-auto py-1.5`} rows={2} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} />
-                </label>
-                <Button size="md" disabled={props.pending} onClick={() => props.onNote(note)}>Notiz speichern</Button>
               </div>
+              <aside className="space-y-5 lg:border-l lg:border-hairline lg:pl-6">
+                <Ownership lead={l} mine={props.mine} pending={props.pending} onRelease={props.onRelease} />
+                <LeadHistory rootId={l.duplicate_of ?? l.id} />
+              </aside>
             </div>
           </td>
         </tr>
