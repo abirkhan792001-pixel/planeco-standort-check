@@ -112,6 +112,32 @@ describe('sortRows', () => {
   });
 });
 
+describe('priority sort (who to call next)', () => {
+  const hamburg = { enrichment_status: 'done' as const, geo_lat: 53.56, geo_lon: 10.0 }; // inside
+  const dresden = { enrichment_status: 'done' as const, geo_lat: 51.05, geo_lon: 13.74 }; // outside (Berlin ~165 km)
+  const unclear = { enrichment_status: 'done' as const, geo_lat: null, geo_lon: null };
+  const at = (hh: string) => `2026-10-01T${hh}:00:00Z`;
+  const rows = deriveLeadViews([
+    makeLeadRow({ id: 'inside-new', created_at: at('10'), ...hamburg }),
+    makeLeadRow({ id: 'inside-old', created_at: at('08'), ...hamburg }),
+    makeLeadRow({ id: 'outside', created_at: at('07'), ...dresden }),
+    makeLeadRow({ id: 'unclear', created_at: at('09'), ...unclear }),
+    makeLeadRow({ id: 'claimed', created_at: at('06'), status: 'in_bearbeitung', assigned_to: 'u1', ...hamburg }),
+    makeLeadRow({ id: 'neu-claimed', created_at: at('05'), assigned_to: 'u1', ...dresden }),
+    makeLeadRow({ id: 'won-old', created_at: at('04'), status: 'gewonnen', assigned_to: 'u1', ...hamburg }),
+    makeLeadRow({ id: 'lost-new', created_at: at('11'), status: 'verloren', assigned_to: 'u1', ...hamburg }),
+  ], [], 'x');
+
+  it('unclaimed by area band (oldest first), then claimed open, then closed (newest first)', () => {
+    expect(sortRows(rows, 'priority', 'asc').map((r) => r.id)).toEqual(
+      ['inside-old', 'inside-new', 'unclear', 'outside', 'claimed', 'neu-claimed', 'lost-new', 'won-old']);
+  });
+  it('is the default and starts most urgent first', () => {
+    expect(DEFAULT_FILTERS).toMatchObject({ sort: 'priority', dir: 'asc' });
+    expect(nextSort({ sort: 'created_at', dir: 'desc' }, 'priority')).toEqual({ sort: 'priority', dir: 'asc' });
+  });
+});
+
 describe('nextSort', () => {
   it('first click on a new column sorts ascending', () => {
     expect(nextSort({ sort: 'created_at', dir: 'desc' }, 'name')).toEqual({ sort: 'name', dir: 'asc' });
@@ -130,7 +156,7 @@ describe('search params round trip', () => {
     expect(filtersFromSearchParams(filtersToSearchParams(f))).toEqual(f);
   });
   it('accepts every column sort key', () => {
-    for (const sort of ['created_at', 'name', 'phone', 'plot', 'area', 'address', 'project', 'reachability', 'channel', 'status', 'owner', 'mail', 'group'] as const) {
+    for (const sort of ['priority', 'created_at', 'name', 'phone', 'plot', 'area', 'address', 'project', 'reachability', 'channel', 'status', 'owner', 'mail', 'group'] as const) {
       expect(filtersFromSearchParams(filtersToSearchParams({ ...DEFAULT_FILTERS, sort })).sort).toBe(sort);
     }
   });

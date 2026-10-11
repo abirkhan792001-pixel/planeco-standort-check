@@ -38,12 +38,13 @@ export function AddressMatch({ lead }: { lead: LeadView }) {
   );
 }
 
-const statusTone: Record<LeadView['status'], LabelTone> = {
+/** Status tone, shared by the badge and the inline status select so both read the same. */
+export const STATUS_TONE: Record<LeadView['status'], LabelTone> = {
   neu: 'blue', in_bearbeitung: 'amber', qualifiziert: 'green', gewonnen: 'green', nicht_qualifiziert: 'grey', verloren: 'grey',
 };
 
-export function StatusBadge({ status }: { status: LeadView['status'] }) {
-  return <Badge tone={statusTone[status]}>{STATUS_LABELS[status]}</Badge>;
+export function StatusBadge({ status, title }: { status: LeadView['status']; title?: string }) {
+  return <Badge tone={STATUS_TONE[status]} title={title}>{STATUS_LABELS[status]}</Badge>;
 }
 
 export function MailBadge({ lead }: { lead: LeadView }) {

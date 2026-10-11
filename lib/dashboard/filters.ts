@@ -1,12 +1,12 @@
 import { CHANNEL_GROUPS, type ChannelGroup } from '@/lib/attribution/types';
 import type { AreaVerdict } from '@/lib/geo/service-area';
 import { foldGerman } from '@/lib/leads/normalize';
-import { LEAD_STATUSES, PROJECT_TYPES, REACHABILITY, type JobStatus, type LeadStatus } from '@/lib/leads/types';
+import { LEAD_STATUSES, PROJECT_TYPES, REACHABILITY, TERMINAL_STATUSES, type JobStatus, type LeadStatus } from '@/lib/leads/types';
 import type { AddressQuality, LeadView } from '@/lib/leads/derive';
 
-/** One key per dashboard column (spec §17: every column is sortable). */
+/** One key per dashboard column (spec §17: every column is sortable), plus `priority` (who to call next). */
 export const SORT_KEYS = [
-  'created_at', 'name', 'phone', 'plot', 'area', 'address', 'project', 'reachability', 'channel', 'status', 'owner', 'mail', 'group',
+  'priority', 'created_at', 'name', 'phone', 'plot', 'area', 'address', 'project', 'reachability', 'channel', 'status', 'owner', 'mail', 'group',
 ] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 export type SortDir = 'asc' | 'desc';
@@ -18,7 +18,7 @@ export type Filters = {
 
 export const DEFAULT_FILTERS: Filters = {
   statuses: [], areas: [], channelGroup: null, mine: false, unassigned: false, hideTest: false, showSpam: false,
-  allSubmissions: false, q: '', sort: 'created_at', dir: 'desc',
+  allSubmissions: false, q: '', sort: 'priority', dir: 'asc',
 };
 
 const AREA_RANK: Record<AreaVerdict, number> = { inside: 0, edge: 1, unclear: 2, pending: 3, failed: 4, outside: 5, 'n/a': 6 };
@@ -55,8 +55,24 @@ export function applyFilters(rows: LeadView[], f: Filters, currentUserId: string
   });
 }
 
+/** Area as a priority band: plots we serve, then ones still to check, then outside (and spam without a verdict). */
+const AREA_BAND: Record<AreaVerdict, number> = { inside: 0, edge: 0, unclear: 1, pending: 1, failed: 1, outside: 2, 'n/a': 2 };
+
+/**
+ * Who to call next, as one number: band × 10^13 + a time part. Bands: unclaimed new leads by area band (0–2), then
+ * claimed open leads by area band (3–5), then closed leads (6). Open leads oldest first (longest wait on top);
+ * closed leads newest first. Deterministic: it does not use the clock, so rows never jump while the list is open.
+ */
+function priorityValue(r: LeadView): number {
+  const created = Date.parse(r.created_at);
+  if (TERMINAL_STATUSES.includes(r.status)) return 6e13 + (1e13 - 1 - created);
+  const band = AREA_BAND[r.area.verdict] + (r.status === 'neu' && !r.assigned_to ? 0 : 3);
+  return band * 1e13 + created;
+}
+
 function sortValue(r: LeadView, key: SortKey): string | number {
   switch (key) {
+    case 'priority': return priorityValue(r);
     case 'created_at': return Date.parse(r.created_at);
     case 'name': return foldGerman(`${r.last_name} ${r.first_name}`);
     case 'phone': return r.phone_e164 ? r.phone_e164.replace(/\D/g, '') : internationalDigits(r.phone_raw.replace(/\D/g, ''));
@@ -83,7 +99,7 @@ export function sortRows(rows: LeadView[], key: SortKey, dir: SortDir): LeadView
   });
 }
 
-/** Header click: the same column toggles; a new column starts ascending, except Eingang (newest first). */
+/** Header click: the same column toggles; a new column starts ascending (Priorität: most urgent first), except Eingang (newest first). */
 export function nextSort(current: { sort: SortKey; dir: SortDir }, key: SortKey): { sort: SortKey; dir: SortDir } {
   if (current.sort === key) return { sort: key, dir: current.dir === 'asc' ? 'desc' : 'asc' };
   return { sort: key, dir: key === 'created_at' ? 'desc' : 'asc' };
