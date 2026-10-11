@@ -11,6 +11,8 @@ export const ENRICHMENT_MAX_AGE_DAYS = 7;
 /** An unclaimed new lead counts as waiting too long from here (ochre), and as overdue from the second (brick). */
 export const WAIT_WARN_HOURS = 24;
 export const WAIT_ALERT_HOURS = 48;
+/** The lead list re-reads from the server this often while its tab is visible (a few reps: ~1 query per rep per minute). */
+export const LIVE_REFRESH_SECONDS = 60;
 
 // test.de is a real domain, but reviewers type it as a fake address (spec E-3): treated as a test lead, never mailed.
 const RESERVED_DOMAINS = ['example.com', 'example.net', 'example.org', 'test.de'];
