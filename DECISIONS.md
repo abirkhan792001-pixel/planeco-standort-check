@@ -9,11 +9,11 @@ Built with Claude Code from a spec and plan I worked out with it; every task got
 2. **Accept and flag instead of reject.** Only unusable leads are blocked; missing house numbers, unknown addresses and odd phone formats are accepted and flagged for Sales.
 3. **Store facts, derive verdicts.** Raw UTMs and geodata are stored; channel and service area are computed at read time, so a config change re-evaluates history.
 4. **One owner per lead, enforced by the database.** Claiming locks the root row; duplicates (same email, phone or plot within 90 days, never the name alone) inherit the owner. Personal logins show who works what.
-5. **Evidence, not dots.** Sales sees "Randlage · Hamburg 55 km · Nur PLZ-genau"; a geocoder hit counts only after it is checked against the typed street.
+5. **Evidence, not dots.** Sales sees "Im Gebiet · Lübeck 8 km · Nur PLZ-genau"; a geocoder hit counts only after it is checked against the typed street.
 6. **Looks like Planeco, marked as a prototype.** The public page uses Planeco's palette, P logo, the Google-rating / DGNB / Das-Handwerk badges and Planeco's "+ 10 Experten vor Ort" / "+ 15 Jahre Erfahrung", taken from planeco's live site, so the funnel can be judged as it would run. The callback item says "Rückruf am nächsten Werktag" instead of Planeco's "< 24 h", because that is what this form promises. The banner marks the page as unofficial and it is not indexed. Where Planeco's colours fail WCAG AA, a slightly darker terracotta (#A9563A) and thin field borders are used. The form runs as three short steps like Planeco's Heyflow form (Vorhaben → Grundstück → Kontakt, one URL, the browser's Back button goes one step back); the API and data model are unchanged — the form now asks for the Vorhaben ("Sonstiges" covers the rest), the API still accepts none. The confirmation mail follows Planeco's own auto-reply (subject, copy, signature, legal footer) but opens and closes with a prototype notice saying the data did not reach Planeco, links the privacy page, loads no third-party fonts, and shows the booking line only when `MAIL_BOOKING_URL` is a valid https URL, because a link to Planeco's Calendly would book real appointments.
 
 ## Assumptions
-- **Service area** (open question for Planeco, see NOTES): metro hubs where Planeco publishes city pages (Hamburg, Berlin, München, Köln, Frankfurt, Düsseldorf, Stuttgart), 50 km + 15 km edge band. One config file, `lib/config/service-area.ts`.
+- **Service area** (open question for Planeco, see NOTES): distance to the nearest of Planeco's 151 location cities (the cities with a Statiker / Architekt location page on planecobuilding.de, which advertises "150+ Standorte"): ≤ 30 km *Im Gebiet*, ≤ 50 km *Randlage*, else *Außerhalb*. The list is Planeco's; the 30/50 km limits are assumed. One config file, `lib/config/service-area.ts`.
 - ≤ 100 leads/day; Sales is 2–5 people with Excel; ads link straight to this page; plots in Germany only.
 - **Manual search-ad tagging:** `utm_source` google or bing (any case) with a paid medium (`cpc`, `ppc`, `paid`, …) and no click id counts as Paid Search (Google Ads / Microsoft Ads), for campaigns tagged by hand or with auto-tagging off. Other paid sources show as "Paid – <source>".
 
@@ -23,7 +23,7 @@ Address autocomplete (Nominatim's policy forbids it; PLZ → Ort autofill instea
 ## Shortcuts (built, but simpler than production)
 | # | Shortcut | Fine now because | Revisit when |
 |---|---|---|---|
-| S1 | Service area = hub radius circles | "Einzugsgebiet" undefined; one file to swap | Planeco defines it, or Sales often overrides |
+| S1 | Service area = 30/50 km circles around Planeco's 151 location cities | "Einzugsgebiet" undefined; the list is from Planeco's site, the distances are assumed; one file to swap | Planeco defines it, or Sales often overrides |
 | S2 | Attribution from the URL at submit only | no cookies, no consent banner | many "Direkt" leads, or a multi-page site |
 | S3 | Honeypot + minimum fill time, no CAPTCHA | no friction on paid traffic | spam appears → Turnstile, then rate limit |
 | S4 | Public Nominatim (1 req/s, OSM data) | free; verdict needs only the municipality | bursts, many "street not found", commercial use |

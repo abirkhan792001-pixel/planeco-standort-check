@@ -7,24 +7,38 @@ const g = (lat: number | null, lon: number | null, flags: string[] = [], status:
   ({ enrichment_status: status, geo_lat: lat, geo_lon: lon, geo_flags: flags });
 
 describe('assessServiceArea (default config)', () => {
-  it('Osterstraße, Hamburg is inside', () => {
+  it('Osterstraße, Hamburg is inside (Hamburg location)', () => {
     const a = assessServiceArea(g(53.5767322, 9.9487538), SERVICE_AREA);
     expect(a.verdict).toBe('inside');
     expect(a.hub).toBe('Hamburg');
     expect(a.distanceKm).toBeLessThan(10);
   });
-  it('Groß Grönau (~57 km) is on the edge', () => {
+  it('Groß Grönau is inside; nearest location Lübeck ~8 km', () => {
     const a = assessServiceArea(g(53.8017, 10.7494), SERVICE_AREA);
-    expect(a.verdict).toBe('edge');
-    expect(a.distanceKm).toBeGreaterThan(50);
-    expect(a.distanceKm).toBeLessThan(65);
+    expect(a.verdict).toBe('inside');
+    expect(a.hub).toBe('Lübeck');
+    expect(a.distanceKm).toBeLessThan(15);
   });
-  it('Dresden is outside; nearest hub Berlin ~164 km', () => {
+  it('Dresden is inside (Dresden location)', () => {
     const a = assessServiceArea(g(51.0589555, 13.7430758), SERVICE_AREA);
+    expect(a.verdict).toBe('inside');
+    expect(a.hub).toBe('Dresden');
+    expect(a.distanceKm).toBeLessThan(5);
+  });
+  it('Uelzen (~33 km from Lüneburg) is on the edge', () => {
+    const a = assessServiceArea(g(52.965, 10.56), SERVICE_AREA);
+    expect(a.verdict).toBe('edge');
+    expect(a.hub).toBe('Lüneburg');
+  });
+  it('Passau (~110 km from Regensburg) is outside', () => {
+    const a = assessServiceArea(g(48.57, 13.43), SERVICE_AREA);
     expect(a.verdict).toBe('outside');
-    expect(a.hub).toBe('Berlin');
-    expect(a.distanceKm).toBeGreaterThan(150);
-    expect(a.distanceKm).toBeLessThan(180);
+    expect(a.hub).toBe('Regensburg');
+    expect(a.distanceKm).toBeGreaterThan(50);
+  });
+  it('lists the 151 Planeco location cities', () => {
+    expect(SERVICE_AREA.hubs).toHaveLength(151);
+    expect(new Set(SERVICE_AREA.hubs.map((h) => h.name)).size).toBe(151);
   });
   it('ambiguous or missing coordinates are unclear', () => {
     expect(assessServiceArea(g(null, null, ['ambiguous']), SERVICE_AREA).verdict).toBe('unclear');
@@ -40,19 +54,20 @@ describe('assessServiceArea (default config)', () => {
 /** A-11: deterministic boundaries. `≤ radius` → inside, `≤ radius + band` → edge. */
 describe('assessServiceArea — boundaries (A-11)', () => {
   const KM_PER_DEG = (6371 * Math.PI) / 180; // 111.1949… km per degree of latitude (haversine R = 6371)
-  const hamburg = SERVICE_AREA.hubs[0];
-  /** A point `km` due north of the Hamburg hub; every other hub is farther than 400 km away. */
+  const hamburg = SERVICE_AREA.hubs.find((h) => h.name === 'Hamburg')!;
+  /** The default limits with Hamburg as the only location, so no neighbouring location (Norderstedt) interferes. */
+  const onlyHamburg = { ...SERVICE_AREA, hubs: [hamburg] };
   const north = (km: number) => g(hamburg.lat + km / KM_PER_DEG, hamburg.lon);
-  const verdictAt = (km: number) => assessServiceArea(north(km), SERVICE_AREA);
+  const verdictAt = (km: number) => assessServiceArea(north(km), onlyHamburg);
 
-  it('default config: just inside / just past the radius (50 km)', () => {
-    expect(verdictAt(49.999).verdict).toBe('inside');
-    expect(verdictAt(50.001).verdict).toBe('edge');
-    expect(verdictAt(50.001).hub).toBe('Hamburg');
+  it('default config: just inside / just past the radius (30 km)', () => {
+    expect(verdictAt(29.999).verdict).toBe('inside');
+    expect(verdictAt(30.001).verdict).toBe('edge');
+    expect(verdictAt(30.001).hub).toBe('Hamburg');
   });
-  it('default config: just inside / just past radius + edge band (65 km)', () => {
-    expect(verdictAt(64.999).verdict).toBe('edge');
-    expect(verdictAt(65.001).verdict).toBe('outside');
+  it('default config: just inside / just past radius + edge band (50 km)', () => {
+    expect(verdictAt(49.999).verdict).toBe('edge');
+    expect(verdictAt(50.001).verdict).toBe('outside');
   });
 
   // The next two use a tiny custom config whose limits are *derived from the haversine distance itself*, so the point

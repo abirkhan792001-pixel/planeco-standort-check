@@ -114,16 +114,16 @@ describe('sortRows', () => {
 
 describe('priority sort (who to call next)', () => {
   const hamburg = { enrichment_status: 'done' as const, geo_lat: 53.56, geo_lon: 10.0 }; // inside
-  const dresden = { enrichment_status: 'done' as const, geo_lat: 51.05, geo_lon: 13.74 }; // outside (Berlin ~165 km)
+  const passau = { enrichment_status: 'done' as const, geo_lat: 48.57, geo_lon: 13.43 }; // outside (Regensburg ~110 km)
   const unclear = { enrichment_status: 'done' as const, geo_lat: null, geo_lon: null };
   const at = (hh: string) => `2026-10-01T${hh}:00:00Z`;
   const rows = deriveLeadViews([
     makeLeadRow({ id: 'inside-new', created_at: at('10'), ...hamburg }),
     makeLeadRow({ id: 'inside-old', created_at: at('08'), ...hamburg }),
-    makeLeadRow({ id: 'outside', created_at: at('07'), ...dresden }),
+    makeLeadRow({ id: 'outside', created_at: at('07'), ...passau }),
     makeLeadRow({ id: 'unclear', created_at: at('09'), ...unclear }),
     makeLeadRow({ id: 'claimed', created_at: at('06'), status: 'in_bearbeitung', assigned_to: 'u1', ...hamburg }),
-    makeLeadRow({ id: 'neu-claimed', created_at: at('05'), assigned_to: 'u1', ...dresden }),
+    makeLeadRow({ id: 'neu-claimed', created_at: at('05'), assigned_to: 'u1', ...passau }),
     makeLeadRow({ id: 'won-old', created_at: at('04'), status: 'gewonnen', assigned_to: 'u1', ...hamburg }),
     makeLeadRow({ id: 'lost-new', created_at: at('11'), status: 'verloren', assigned_to: 'u1', ...hamburg }),
   ], [], 'x');

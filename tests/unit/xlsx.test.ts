@@ -90,7 +90,7 @@ describe('buildLeadsWorkbook: Alle Daten', () => {
   it('writes missing values as truly blank cells, not as empty strings', async () => {
     const views = deriveLeadViews([makeLeadRow({ sales_note: null, plot_note: null, phone_extension: null, is_test: false, reachability: [], geo_flags: [], duplicate_of: null, disqualify_reason: null })], [], 'x');
     const ws = await readBack(await buildLeadsWorkbook(views));
-    for (const h of ['Notiz', 'Angaben zum Grundstück', 'Durchwahl', 'Test', 'Erreichbarkeit', 'Adress-Hinweise', 'Grund', 'Bearbeiter', 'Duplikat von', 'Nächster Hub', 'Entfernung km', 'Breitengrad', 'Längengrad', 'utm_source', 'gclid']) {
+    for (const h of ['Notiz', 'Angaben zum Grundstück', 'Durchwahl', 'Test', 'Erreichbarkeit', 'Adress-Hinweise', 'Grund', 'Bearbeiter', 'Duplikat von', 'Nächster Standort', 'Entfernung km', 'Breitengrad', 'Längengrad', 'utm_source', 'gclid']) {
       expect(col(h), h).toBeGreaterThan(0);
       const cell = ws.getRow(FIRST).getCell(col(h));
       expect(cell.value, h).toBeNull();
@@ -167,12 +167,12 @@ describe('buildLeadsWorkbook: work sheets and overview', () => {
   const now = new Date('2026-10-11T13:00:00Z');
   const ago = (h: number) => new Date(now.getTime() - h * 3_600_000).toISOString();
   const hamburg = { enrichment_status: 'done' as const, geo_precision: 'house' as const, geo_lat: 53.56, geo_lon: 10.0 };
-  const dresden = { enrichment_status: 'done' as const, geo_precision: 'house' as const, geo_lat: 51.05, geo_lon: 13.74 };
+  const passau = { enrichment_status: 'done' as const, geo_precision: 'house' as const, geo_lat: 48.57, geo_lon: 13.43 }; // outside (Regensburg ~110 km)
   const rows = [
     makeLeadRow({ id: id(1), last_name: 'Fresh', created_at: ago(2), ...hamburg }),
     makeLeadRow({ id: id(2), last_name: 'Waiting', created_at: ago(30), ...hamburg }),
-    makeLeadRow({ id: id(3), last_name: 'Outside', created_at: ago(60), ...dresden }),
-    makeLeadRow({ id: id(4), last_name: 'Repeat', created_at: ago(1), duplicate_of: id(3), ...dresden }),
+    makeLeadRow({ id: id(3), last_name: 'Outside', created_at: ago(60), ...passau }),
+    makeLeadRow({ id: id(4), last_name: 'Repeat', created_at: ago(1), duplicate_of: id(3), ...passau }),
     makeLeadRow({ id: id(5), last_name: 'Spam', created_at: ago(1), spam_suspected: true, enrichment_status: 'skipped' }),
     makeLeadRow({ id: id(6), last_name: 'Claimed', created_at: ago(40), status: 'in_bearbeitung', assigned_to: 'u2', ...hamburg }),
     makeLeadRow({ id: id(7), last_name: 'Mine', created_at: ago(45), status: 'qualifiziert', assigned_to: 'u1', ...hamburg }),

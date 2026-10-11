@@ -4,7 +4,7 @@ import { deriveLeadViews } from '@/lib/leads/derive';
 import { makeLeadRow } from '../fixtures/lead-row';
 
 const HH = { enrichment_status: 'done' as const, geo_lat: 53.57, geo_lon: 9.95 };
-const DD = { enrichment_status: 'done' as const, geo_lat: 51.06, geo_lon: 13.74 };
+const DD = { enrichment_status: 'done' as const, geo_lat: 48.57, geo_lon: 13.43 }; // Passau: outside (Regensburg ~110 km)
 /** Enrichment finished but no coordinates: the area verdict is `unclear`. */
 const NOGEO = { enrichment_status: 'done' as const, geo_lat: null, geo_lon: null };
 

@@ -7,10 +7,10 @@
 2. **Accept and flag, don't reject.** Missing house numbers, unknown addresses and odd phone formats reach Sales with a flag.
 3. **Store facts, derive verdicts.** Raw UTMs and geodata are stored; channel and service area are computed at read time, so a config change re-evaluates history.
 4. **One owner per lead, enforced by the database.** Claiming locks the row; duplicates (same email, phone or address within 90 days) inherit the owner.
-5. **Evidence, not dots.** Sales sees "Randlage · Hamburg 55 km · Nur PLZ-genau"; a geocoder hit counts only after it matches the typed street.
+5. **Evidence, not dots.** Sales sees "Im Gebiet · Lübeck 8 km · Nur PLZ-genau"; a geocoder hit counts only after it matches the typed street.
 
 ## Open question for Planeco: the service area
-The brief leaves the "Einzugsgebiet" open. I assumed the metro hubs with Planeco city pages (Hamburg, Berlin, München, Köln, Frankfurt, Düsseldorf, Stuttgart), 50 km plus a 15 km edge band. It lives in one file (`lib/config/service-area.ts`); changing it re-evaluates every past lead.
+The brief leaves the "Einzugsgebiet" open, and Planeco's site says both "In ganz Deutschland" ("150+ Standorte") and "in ausgewählten Regionen … direkt vor Ort". So the verdict is the distance to the nearest Planeco location: the 151 cities with a Planeco location page (Statiker / Architekt finden). Up to 30 km is *Im Gebiet*, 30–50 km *Randlage*, beyond that *Außerhalb* (Sales decides; it is not a rejection). The list comes from Planeco's site; the 30/50 km limits are my assumption. Open question: how far do your partners travel? It lives in one file (`lib/config/service-area.ts`); changing it re-evaluates every past lead.
 
 ## Open
 1. **Deliverability:** without an own domain, Brevo rewrites the Gmail sender to @brevosend.com; confirmations can land in spam.

@@ -18,11 +18,11 @@ The five case samples are seeded as test data. Dashboard view of the seeded samp
 
 | # | Sample | Dashboard |
 |---|---|---|
-| 1 | Thomas Ahrens, Hauptstraße 14, 01067 Dresden | Außerhalb · Berlin ~164 km · Hausgenau, but "PLZ passt nicht zur Straße (gefunden: 01097)" · Paid Social / Meta Ads |
+| 1 | Thomas Ahrens, Hauptstraße 14, 01067 Dresden | Im Gebiet · Dresden ~1 km · Hausgenau, but "PLZ passt nicht zur Straße (gefunden: 01097)" · Paid Social / Meta Ads |
 | 2 | Marion Beckmann, "Adresse unbekannt": Lindenweg 3, Neustadt | Unklar · Mehrdeutig (candidates in three federal states) · Paid Search / Google Ads |
 | 3 | Kai Ruthenberg, Osterstraße 88, 22765 Hamburg | Im Gebiet · Hamburg · Straßengenau (house number not in OSM, PLZ mismatch) · Paid Search / Google Ads (manual UTM tagging, no gclid) |
 | 4 | Thomas Ahrens again, phone `004940123456` | Duplicate of #1 (phone + address): hidden in the default view, #1 shows "2 Anfragen"; visible with "Alle Einzelanfragen" |
-| 5 | Jörg Klöpper, Am Mühlenteich 7, 23627 Groß Grönau | Randlage · Hamburg ~55 km · Nur PLZ-genau (street not in OSM) · Organic Search (google.de) |
+| 5 | Jörg Klöpper, Am Mühlenteich 7, 23627 Groß Grönau | Im Gebiet · Lübeck ~8 km · Nur PLZ-genau (street not in OSM) · Organic Search (google.de) |
 
 The report (`/dashboard/report`) excludes test data by default; "Testdaten einbeziehen" shows the seeded channels.
 
@@ -89,7 +89,7 @@ See `.env.example`.
 Automated: `npm test` (457 passing), `npx tsc --noEmit`, `npm run lint` and `npm run build` are clean.
 
 Verified against production / the live database:
-- **Case samples (production, seeded via the real API):** all five stored and enriched as listed above — #1 house-level, PLZ mismatch (found 01097), Sachsen; #2 `address_unknown` + `ambiguous`, no coordinates; #3 street-level, PLZ mismatch (found 20255), DE-HH; #4 linked to #1 as duplicate (phone + address); #5 postcode-level, DE-SH, ~55 km from Hamburg. Test addresses were not mailed (`test_domain`). Re-running the seed replays (HTTP 200) and creates no new rows.
+- **Case samples (production, seeded via the real API):** all five stored and enriched as listed above — #1 house-level, PLZ mismatch (found 01097), Sachsen; #2 `address_unknown` + `ambiguous`, no coordinates; #3 street-level, PLZ mismatch (found 20255), DE-HH; #4 linked to #1 as duplicate (phone + address); #5 postcode-level, DE-SH, ~8 km from the Lübeck location. (Enrichment facts verified on production; the area verdicts follow the current location list in `lib/config/service-area.ts` and are computed at read time.) Test addresses were not mailed (`test_domain`). Re-running the seed replays (HTTP 200) and creates no new rows.
 - **Claiming (C-1):** two concurrent `claim_lead` calls on the same lead → exactly one wins (row lock).
 - **Mail claim:** two concurrent mail claims → exactly one sends; a claim stuck in `sending` for more than 10 minutes is retried.
 - **Access (C-7):** RPC calls without a session are denied (401 / `42501`); `/dashboard` redirects to `/login` when logged out; the export is POST-only (GET → 405) and checks the session itself.

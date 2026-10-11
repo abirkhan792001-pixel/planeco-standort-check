@@ -3,7 +3,7 @@ import type { AddressQuality, LeadView } from '@/lib/leads/derive';
 import { ADDRESS_TEXT, AREA_TEXT, AREA_TONE, geoFlagTexts, mailStatusLabel, STATUS_LABELS, STATUS_TONE, type LabelTone } from '@/lib/labels';
 import { Badge, DistanceBar, toneText } from './ui';
 
-/** Verdict in its tone with the distance bar beside it; "12 km · Hub" below. Without a distance only the verdict. */
+/** Verdict in its tone with the distance bar beside it; "12 km · Planeco location" below. Without a distance only the verdict. */
 export function AreaVerdict({ area }: { area: AreaAssessment }) {
   const hasKm = area.distanceKm !== undefined && Boolean(area.hub);
   return (
