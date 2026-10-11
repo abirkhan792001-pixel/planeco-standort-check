@@ -90,7 +90,7 @@ export function Eyebrow({ children, className = '' }: { children: React.ReactNod
 }
 
 /**
- * Distance bar: kilometres to the nearest hub on a fixed scale, with the service radius and the edge band marked.
+ * Distance bar: kilometres to the nearest Planeco location on a fixed scale, with the service radius and the edge band marked.
  * The scale runs to radius + 3 × edge band; anything farther pins to the end.
  */
 const SCALE_KM = SERVICE_AREA.radiusKm + 3 * SERVICE_AREA.edgeBandKm;
