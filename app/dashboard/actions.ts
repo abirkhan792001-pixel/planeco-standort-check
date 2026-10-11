@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import type { DisqualifyReason, LeadStatus } from '@/lib/leads/types';
+import { buildHistory, type HistoryItem, type LeadEvent } from '@/lib/dashboard/history';
 
 export type ActionResult = { ok: boolean; message?: string; conflict?: boolean };
 
@@ -62,4 +63,38 @@ export async function setNoteAction(id: string, note: string): Promise<ActionRes
   if (error) return fail(error);
   revalidatePath('/dashboard');
   return { ok: true };
+}
+
+export type HistoryResult = { ok: true; items: HistoryItem[] } | { ok: false; message: string };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Enough for any real lead; duplicates' own mail/address events are read but dropped by buildHistory. */
+const HISTORY_READ_LIMIT = 200;
+
+function historyFail(where: string, error: { message: string; code?: string }): HistoryResult {
+  // Code/message only, never row data.
+  console.error(`leadHistory: ${where} failed`, { code: error.code, message: error.message });
+  return { ok: false, message: 'Verlauf konnte nicht geladen werden.' };
+}
+
+/** Read-only: the events of a lead group (RLS lets every signed-in user read them), described in German. */
+export async function leadHistoryAction(rootId: string): Promise<HistoryResult> {
+  if (!UUID.test(rootId)) return { ok: false, message: 'Verlauf konnte nicht geladen werden.' };
+  const supabase = await authed();
+  const dups = await supabase.from('leads').select('id').eq('duplicate_of', rootId);
+  if (dups.error) return historyFail('duplicates', dups.error);
+  const events = await supabase.from('lead_events').select('id,lead_id,created_at,actor_id,type,data')
+    .in('lead_id', [rootId, ...(dups.data ?? []).map((d) => d.id as string)])
+    .order('created_at', { ascending: false }).limit(HISTORY_READ_LIMIT);
+  if (events.error) return historyFail('events', events.error);
+  const rows = (events.data ?? []) as LeadEvent[];
+  // People named in the history: whoever acted, and the previous owner of a forced claim.
+  const people = [...new Set(rows.flatMap((e) => [e.actor_id, e.data?.previous_owner]).filter((id): id is string => typeof id === 'string'))];
+  const names = new Map<string, string>();
+  if (people.length) {
+    const profiles = await supabase.from('profiles').select('id,display_name').in('id', people);
+    if (profiles.error) console.error('leadHistory: profiles failed', { code: profiles.error.code, message: profiles.error.message });
+    for (const p of profiles.data ?? []) names.set(p.id as string, p.display_name as string);
+  }
+  return { ok: true, items: buildHistory(rows, rootId, names) };
 }
