@@ -17,3 +17,11 @@ export function berlinDate(d: Date = new Date()): string {
   const parts = Object.fromEntries(dayFmt.formatToParts(d).map((p) => [p.type, p.value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
+
+const clockFmt = new Intl.DateTimeFormat('de-DE', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+
+/** Minutes since midnight in Europe/Berlin (call windows are Berlin wall-clock times, whatever the server's zone). */
+export function berlinMinuteOfDay(ms: number): number {
+  const parts = Object.fromEntries(clockFmt.formatToParts(new Date(ms)).map((p) => [p.type, p.value]));
+  return Number(parts.hour) * 60 + Number(parts.minute);
+}

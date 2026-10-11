@@ -14,5 +14,5 @@ export default async function DashboardPage() {
   // Without profiles the list still works; owners then show as "Unbekannt". Log only code/message (no row data).
   if (profiles.error) console.error('dashboard: profiles query failed', { code: profiles.error.code, message: profiles.error.message });
   const views = deriveLeadViews(leads.rows, profiles.data ?? [], ownHost());
-  return <LeadTable views={views} currentUserId={user.id} truncated={leads.truncated} />;
+  return <LeadTable views={views} currentUserId={user.id} truncated={leads.truncated} now={Date.now()} />;
 }

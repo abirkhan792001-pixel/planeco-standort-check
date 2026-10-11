@@ -1,17 +1,18 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import { unstable_rethrow, useRouter } from 'next/navigation';
 import { applyFilters, DEFAULT_FILTERS, filtersToSearchParams, nextSort, sortRows, type Filters, type SortKey } from '@/lib/dashboard/filters';
 import type { LeadView } from '@/lib/leads/derive';
 import { CHANNEL_GROUPS, type ChannelGroup } from '@/lib/attribution/types';
-import { DISQUALIFY_REASONS, LEAD_STATUSES, type DisqualifyReason, type LeadStatus } from '@/lib/leads/types';
-import { DEVICE_LABELS, GEO_FLAG_LABELS, geoFlagTexts, mailStatusLabel, PROJECT_TYPE_LABELS, REACHABILITY_LABELS, REASON_LABELS, STATE_LABELS, STATUS_LABELS } from '@/lib/labels';
+import { DISQUALIFY_REASONS, LEAD_STATUSES, REACHABILITY, type DisqualifyReason, type LeadStatus } from '@/lib/leads/types';
+import { DEVICE_LABELS, GEO_FLAG_LABELS, geoFlagTexts, mailStatusLabel, PROJECT_TYPE_LABELS, REACHABILITY_HOURS, REACHABILITY_LABELS, REASON_LABELS, STATE_LABELS, STATUS_LABELS } from '@/lib/labels';
+import { reachableUntil, waitingTime } from '@/lib/dashboard/urgency';
 import { DUPLICATE_WINDOW_DAYS } from '@/lib/config/app';
 import { formatBerlin } from '@/lib/format';
 import { claimLeadAction, releaseLeadAction, setNoteAction, setStatusAction, type ActionResult } from '@/app/dashboard/actions';
-import { AddressMatch, AREA_TONE, AreaVerdict, MailBadge, StatusBadge } from './badges';
-import { Badge, Button, buttonClass, Chip, Eyebrow, fieldClass, fieldClassSm, focusRing, Segmented } from './ui';
+import { AddressMatch, AREA_TONE, AreaVerdict, MailBadge, STATUS_TONE, StatusBadge } from './badges';
+import { Badge, Button, buttonClass, Chip, Eyebrow, fieldClass, fieldClassSm, focusRing, Segmented, toneClass, toneText } from './ui';
 
 /** The pipeline in reading order: open stages, then the three ways a lead ends. */
 const OPEN_STATUSES = ['neu', 'in_bearbeitung', 'qualifiziert'] as const satisfies readonly LeadStatus[];
@@ -24,12 +25,12 @@ const OWNER_OPTIONS = [['all', 'Alle'], ['mine', 'Meine'], ['unassigned', 'Nicht
 const LIST_OPTIONS = [['hideTest', 'Testdaten ausblenden'], ['showSpam', 'Spam anzeigen'], ['allSubmissions', 'Alle Einzelanfragen']] as const;
 /** Every sort key keeps a name: merged columns sort by their first key, the rest stay reachable via the sort select. */
 const SORT_LABELS: Record<SortKey, string> = {
-  created_at: 'Eingang', name: 'Name', phone: 'Telefon', plot: 'Grundstück', area: 'Gebiet', address: 'Verortung',
+  priority: 'Priorität', created_at: 'Eingang', name: 'Name', phone: 'Telefon', plot: 'Grundstück', area: 'Gebiet', address: 'Verortung',
   project: 'Vorhaben', reachability: 'Erreichbarkeit', channel: 'Kanal / Kampagne', status: 'Status', owner: 'Bearbeiter',
   mail: 'Mail', group: 'Anzahl Einsendungen',
 };
 const DUP_REASON: Record<string, string> = { email: 'E-Mail', phone: 'Telefon', address: 'Adresse' };
-const COLUMN_COUNT = 8;
+const COLUMN_COUNT = 7;
 const UNEXPECTED_ERROR = 'Aktion fehlgeschlagen – bitte Seite neu laden.';
 const cell = 'px-3 py-3';
 const sub = 'mt-0.5 text-xs text-muted';
@@ -60,8 +61,89 @@ function SearchIcon() {
   );
 }
 
-export function LeadTable({ views, currentUserId, truncated }: { views: LeadView[]; currentUserId: string; truncated: boolean }) {
+/** Ticks once a minute so waiting times and "Jetzt erreichbar" stay current. Starts from the server's clock (hydration). */
+function useNow(serverNow: number): number {
+  const [now, setNow] = useState(serverNow);
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
+/** The lead's preferred call times under the phone number; "Jetzt erreichbar" while one of them is open (Berlin time). */
+function CallTimes({ lead, now }: { lead: LeadView; now: number }) {
+  const slots = REACHABILITY.filter((s) => lead.reachability.includes(s));
+  if (slots.length === 0) return null;
+  const all = `Wunschzeiten: ${slots.map((s) => `${REACHABILITY_LABELS[s]} ${REACHABILITY_HOURS[s]}`).join(' · ')}`;
+  const until = reachableUntil(lead, now);
+  if (until !== null) {
+    return (
+      <div className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-moss" title={all}>
+        <span aria-hidden="true" className="size-1.5 rounded-full bg-moss" />Jetzt erreichbar · bis {until} Uhr
+      </div>
+    );
+  }
+  return (
+    <div className={sub} title={all}>
+      erreichbar {slots.length === 1 ? `${REACHABILITY_LABELS[slots[0]]} (${REACHABILITY_HOURS[slots[0]]})` : slots.map((s) => REACHABILITY_LABELS[s]).join(', ')}
+    </div>
+  );
+}
+
+/**
+ * Status in the row. On your own lead: a select in the status colour that saves on change; "Nicht qualifiziert" asks
+ * for the reason first. A failed save puts the select back. Anyone else's lead (or an unclaimed one): the badge.
+ */
+function StatusControl({ lead, mine, pending, onStatus }: {
+  lead: LeadView; mine: boolean; pending: boolean; onStatus: (s: LeadStatus, r: DisqualifyReason | null) => Promise<boolean>;
+}) {
+  const [draft, setDraft] = useState<LeadStatus>(lead.status);
+  const [reason, setReason] = useState<DisqualifyReason | ''>(lead.disqualify_reason ?? '');
+  const reasonText = lead.disqualify_reason && <div className={sub}>{REASON_LABELS[lead.disqualify_reason]}</div>;
+  if (!mine) {
+    return <><StatusBadge status={lead.status} title="Status ändern: Anfrage zuerst übernehmen" />{reasonText}</>;
+  }
+  const reset = () => { setDraft(lead.status); setReason(lead.disqualify_reason ?? ''); };
+  const save = (s: LeadStatus, r: DisqualifyReason | null) => onStatus(s, r).then((ok) => { if (!ok) reset(); });
+  const asking = draft === 'nicht_qualifiziert';
+  const entering = lead.status !== 'nicht_qualifiziert';
+  const changed = reason !== '' && (entering || reason !== lead.disqualify_reason);
+  return (
+    <div className="space-y-1.5">
+      <select aria-label={`Status von ${lead.first_name} ${lead.last_name}`} value={draft} disabled={pending}
+        className={`h-7 cursor-pointer rounded border border-current/30 pl-1.5 pr-1 text-xs font-medium disabled:cursor-wait disabled:opacity-60 ${toneClass[STATUS_TONE[draft]]} ${focusRing}`}
+        onChange={(e) => {
+          const next = e.target.value as LeadStatus;
+          setDraft(next);
+          if (next !== 'nicht_qualifiziert') void save(next, null);
+        }}>
+        {LEAD_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
+      </select>
+      {asking ? (
+        <div className="flex flex-wrap items-center gap-1">
+          <select aria-label="Grund für „Nicht qualifiziert“" value={reason} disabled={pending} className={fieldClassSm}
+            onChange={(e) => setReason(e.target.value as DisqualifyReason)}>
+            <option value="">Grund wählen …</option>
+            {DISQUALIFY_REASONS.map((r) => <option key={r} value={r}>{REASON_LABELS[r]}</option>)}
+          </select>
+          {(entering || changed) && (
+            <>
+              <Button variant="primary" disabled={pending || !changed} onClick={() => void save('nicht_qualifiziert', reason as DisqualifyReason)}>Speichern</Button>
+              <Button variant="ghost" onClick={reset}>Abbrechen</Button>
+            </>
+          )}
+        </div>
+      ) : reasonText}
+    </div>
+  );
+}
+
+export function LeadTable({ views, currentUserId, truncated, now: serverNow }: {
+  views: LeadView[]; currentUserId: string; truncated: boolean; now: number;
+}) {
   const router = useRouter();
+  const now = useNow(serverNow);
   const [f, setF] = useState<Filters>(DEFAULT_FILTERS);
   const [open, setOpen] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; retryForce?: string } | null>(null);
@@ -81,20 +163,23 @@ export function LeadTable({ views, currentUserId, truncated }: { views: LeadView
     || f.hideTest || f.showSpam || f.allSubmissions);
   const owner = f.mine ? 'mine' : f.unassigned ? 'unassigned' : 'all';
 
+  // Resolves to whether the action succeeded, so a control can undo its optimistic value (the inline status select).
   const run = (action: () => Promise<ActionResult>, leadId?: string) =>
-    start(async () => {
+    new Promise<boolean>((resolve) => start(async () => {
       try {
         const r = await action();
         if (!r.ok) setToast({ text: r.message ?? 'Fehler', retryForce: r.conflict ? leadId : undefined });
         else setToast(null);
+        resolve(r.ok);
         router.refresh();
       } catch (e) {
+        resolve(false);
         // C-4: an expired session makes the action call redirect('/login'); Next rejects the call with a redirect
         // error that must reach its RedirectBoundary untouched. Anything else is unexpected (network, server crash).
         unstable_rethrow(e);
         setToast({ text: UNEXPECTED_ERROR });
       }
-    });
+    }));
 
   const th = (key: SortKey, label: string) => (
     <th scope="col" className="px-3 py-2.5 text-left"
@@ -215,7 +300,7 @@ export function LeadTable({ views, currentUserId, truncated }: { views: LeadView
           <thead className="border-b border-hairline bg-paper">
             <tr>
               {th('created_at', 'Eingang')}{th('name', 'Interessent')}{th('area', 'Standort')}{th('project', 'Vorhaben')}
-              {th('channel', 'Kanal')}{th('status', 'Status')}{th('mail', 'Mail')}
+              {th('channel', 'Kanal')}{th('status', 'Status')}
               <th scope="col" className="px-3 py-2.5"><span className="sr-only">Aktionen</span></th>
             </tr>
           </thead>
@@ -225,7 +310,7 @@ export function LeadTable({ views, currentUserId, truncated }: { views: LeadView
               // The key includes the server-side editable values: after router.refresh() the row's local form state
               // (status select, reason, note) re-initialises from the fresh data instead of showing stale values.
               return (
-                <FragmentRow key={`${l.id}|${l.status}|${l.disqualify_reason ?? ''}|${l.sales_note ?? ''}`} lead={l} mine={mine} open={open === l.id} pending={pending}
+                <FragmentRow key={`${l.id}|${l.status}|${l.disqualify_reason ?? ''}|${l.sales_note ?? ''}`} lead={l} mine={mine} open={open === l.id} pending={pending} now={now}
                   onToggle={() => setOpen(open === l.id ? null : l.id)}
                   onClaim={() => run(() => claimLeadAction(l.id), l.id)} onRelease={() => run(() => releaseLeadAction(l.id))}
                   onStatus={(s, r) => run(() => setStatusAction(l.id, s, r))} onNote={(n) => run(() => setNoteAction(l.id, n))} />
@@ -245,16 +330,17 @@ export function LeadTable({ views, currentUserId, truncated }: { views: LeadView
 }
 
 function FragmentRow(props: {
-  lead: LeadView; mine: boolean; open: boolean; pending: boolean; onToggle: () => void; onClaim: () => void; onRelease: () => void;
-  onStatus: (s: LeadStatus, r: DisqualifyReason | null) => void; onNote: (n: string) => void;
+  lead: LeadView; mine: boolean; open: boolean; pending: boolean; now: number; onToggle: () => void; onClaim: () => void; onRelease: () => void;
+  onStatus: (s: LeadStatus, r: DisqualifyReason | null) => Promise<boolean>; onNote: (n: string) => void;
 }) {
   const { lead: l } = props;
-  const [status, setStatus] = useState<LeadStatus>(l.status);
-  const [reason, setReason] = useState<DisqualifyReason | ''>(l.disqualify_reason ?? '');
   const [note, setNote] = useState(l.sales_note ?? '');
   const map = osmLink(l);
   const flags = geoFlagTexts(l);
-  const mailHint = mailStatusLabel(l).title;
+  const mail = mailStatusLabel(l);
+  // Only mail problems reach the row (the address may be wrong: call instead); the full state is in Details.
+  const mailProblem = mail.tone === 'red' || mail.tone === 'amber' ? mail : null;
+  const waiting = waitingTime(l, props.now);
   const [date, time] = formatBerlin(l.created_at).split(' ');
   const place = placeLines(l);
   return (
@@ -262,6 +348,10 @@ function FragmentRow(props: {
       <tr className={`border-t border-hairline align-top first:border-t-0 ${props.open ? 'bg-paper' : 'hover:bg-paper/70'}`}>
         <td className={`${cell} whitespace-nowrap font-data text-[13px] tabular-nums`}>
           {date}<div className="text-muted">{time}</div>
+          {waiting && (
+            <div className={`mt-1 font-ui text-xs ${waiting.tone === 'grey' ? 'text-muted' : `font-semibold ${toneText[waiting.tone]}`}`}
+              title="Seit Eingang, noch von niemandem übernommen">{waiting.text}</div>
+          )}
           {l.is_test && <div className="mt-1"><Badge tone="grey">Test</Badge></div>}
         </td>
         <td className={`${cell} min-w-52`}>
@@ -275,7 +365,9 @@ function FragmentRow(props: {
           </div>
           <a href={`tel:${l.phone_e164 ?? l.phone_raw}`} className="font-data text-[13px] text-ink underline decoration-line underline-offset-2 hover:decoration-ink">{l.phone_raw}</a>
           {l.phone_extension && <span className="ml-1 text-xs text-muted">Durchwahl {l.phone_extension}</span>}
-          <div className="break-all text-xs text-muted">{l.email}</div>
+          <CallTimes lead={l} now={props.now} />
+          <div className="mt-0.5 break-all text-xs text-muted">{l.email}</div>
+          {mailProblem && <div className={`text-xs font-medium ${toneText[mailProblem.tone]}`} title={mailProblem.title}>⚠ {mailProblem.text}</div>}
           {l.duplicate_of && <div className={sub}>Wiederholte Einsendung (gleiche {(l.duplicate_reason ?? []).map((r) => DUP_REASON[r] ?? r).join(', ')})</div>}
           {l.related_lead_id && <div className={sub}>früherer Kontakt</div>}
         </td>
@@ -295,15 +387,12 @@ function FragmentRow(props: {
         </td>
         <td className={cell}>
           {l.project_type ? PROJECT_TYPE_LABELS[l.project_type] : '—'}
-          {l.reachability.length > 0 && <div className={sub}>{l.reachability.map((s) => REACHABILITY_LABELS[s]).join(', ')}</div>}
         </td>
         <td className={cell}>{l.channel.channel}<div className={sub}>{l.channel.campaign}</div></td>
         <td className={cell}>
-          <StatusBadge status={l.status} />
-          {l.disqualify_reason && <div className={sub}>{REASON_LABELS[l.disqualify_reason]}</div>}
+          <StatusControl lead={l} mine={props.mine} pending={props.pending} onStatus={props.onStatus} />
           <div className={sub}>{l.ownerName ?? 'Nicht zugewiesen'}</div>
         </td>
-        <td className={cell}><MailBadge lead={l} /></td>
         <td className={`${cell} whitespace-nowrap text-right`}>
           <div className="inline-flex gap-1.5">
             {!l.assigned_to && <Button variant="confirm" disabled={props.pending} onClick={props.onClaim}>Übernehmen</Button>}
@@ -330,32 +419,17 @@ function FragmentRow(props: {
                 </dd>
               </div>
               {flags.length > 0 && <div className="md:col-span-3"><dt><Eyebrow>Adress-Hinweise</Eyebrow></dt><dd className="mt-0.5 font-medium text-ochre">{flags.join(' · ')}</dd></div>}
-              {mailHint && <div className="md:col-span-3"><dt><Eyebrow>Mail-Hinweis</Eyebrow></dt><dd className="mt-0.5">{mailHint}</dd></div>}
+              <div className="md:col-span-3">
+                <dt><Eyebrow>Bestätigungsmail</Eyebrow></dt>
+                <dd className="mt-0.5 flex flex-wrap items-center gap-2"><MailBadge lead={l} />{mail.title && <span className="text-xs text-muted">{mail.title}</span>}</dd>
+              </div>
               {Array.isArray(l.geo_candidates) && (
                 <div className="md:col-span-3"><dt><Eyebrow>Kandidaten</Eyebrow></dt>
                   <dd className="mt-0.5">{(l.geo_candidates as { label: string; stateCode: string | null }[]).map((c) => `${c.label} (${c.stateCode ?? '?'})`).join(' · ')}</dd>
                 </div>
               )}
             </dl>
-            <div className="mt-4 grid gap-4 border-t border-hairline pt-4 lg:grid-cols-[auto_1fr]">
-              <div className="flex flex-wrap items-end gap-2 text-sm">
-                <label className="flex flex-col gap-1"><Eyebrow>Status</Eyebrow>
-                  <select className={fieldClass} value={status} onChange={(e) => setStatus(e.target.value as LeadStatus)} disabled={!props.mine}>
-                    {LEAD_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
-                  </select>
-                </label>
-                {status === 'nicht_qualifiziert' && (
-                  <label className="flex flex-col gap-1"><Eyebrow>Grund</Eyebrow>
-                    <select className={fieldClass} value={reason} onChange={(e) => setReason(e.target.value as DisqualifyReason)} disabled={!props.mine}>
-                      <option value="">bitte wählen</option>
-                      {DISQUALIFY_REASONS.map((r) => <option key={r} value={r}>{REASON_LABELS[r]}</option>)}
-                    </select>
-                  </label>
-                )}
-                <Button variant="primary" size="md" disabled={!props.mine || props.pending || (status === 'nicht_qualifiziert' && !reason)}
-                  onClick={() => props.onStatus(status, status === 'nicht_qualifiziert' ? (reason as DisqualifyReason) : null)}>Status speichern</Button>
-                {!props.mine && <span className="basis-full text-xs text-muted">Zum Bearbeiten bitte zuerst übernehmen.</span>}
-              </div>
+            <div className="mt-4 border-t border-hairline pt-4">
               <div className="flex items-end gap-2 text-sm">
                 <label className="flex flex-1 flex-col gap-1"><Eyebrow>Notiz</Eyebrow>
                   <textarea className={`${fieldClass} h-auto py-1.5`} rows={2} maxLength={2000} value={note} onChange={(e) => setNote(e.target.value)} />
