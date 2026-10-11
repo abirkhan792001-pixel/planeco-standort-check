@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { unstable_rethrow, useRouter } from 'next/navigation';
 import { applyFilters, DEFAULT_FILTERS, filtersToSearchParams, nextSort, sortRows, type Filters, type SortKey } from '@/lib/dashboard/filters';
 import type { LeadView } from '@/lib/leads/derive';
@@ -8,7 +8,7 @@ import { CHANNEL_GROUPS, type ChannelGroup } from '@/lib/attribution/types';
 import { DISQUALIFY_REASONS, LEAD_STATUSES, REACHABILITY, type DisqualifyReason, type LeadStatus } from '@/lib/leads/types';
 import { DEVICE_LABELS, GEO_FLAG_LABELS, geoFlagTexts, mailStatusLabel, PROJECT_TYPE_LABELS, REACHABILITY_HOURS, REACHABILITY_LABELS, REASON_LABELS, STATE_LABELS, STATUS_LABELS } from '@/lib/labels';
 import { reachableUntil, waitingTime } from '@/lib/dashboard/urgency';
-import { DUPLICATE_WINDOW_DAYS } from '@/lib/config/app';
+import { DUPLICATE_WINDOW_DAYS, LIVE_REFRESH_SECONDS } from '@/lib/config/app';
 import { formatBerlin } from '@/lib/format';
 import { claimLeadAction, releaseLeadAction, setNoteAction, setStatusAction, type ActionResult } from '@/app/dashboard/actions';
 import { AddressMatch, AREA_TONE, AreaVerdict, MailBadge, STATUS_TONE, StatusBadge } from './badges';
@@ -33,6 +33,8 @@ const DUP_REASON: Record<string, string> = { email: 'E-Mail', phone: 'Telefon', 
 const COLUMN_COUNT = 7;
 const UNEXPECTED_ERROR = 'Aktion fehlgeschlagen – bitte Seite neu laden.';
 const cell = 'px-3 py-3';
+/** Column headings: paper band with its own bottom line (a sticky cell drops the row border); sticky from xl. */
+const stickyTh = 'bg-paper shadow-[inset_0_-1px_0_var(--color-hairline)] first:rounded-tl-lg last:rounded-tr-lg xl:sticky xl:top-[var(--toolbar-h)] xl:z-10';
 const sub = 'mt-0.5 text-xs text-muted';
 
 function osmLink(l: LeadView) {
@@ -69,6 +71,47 @@ function useNow(serverNow: number): number {
     return () => clearInterval(id);
   }, []);
   return now;
+}
+
+/**
+ * Re-reads the list from the server every LIVE_REFRESH_SECONDS while the tab is visible, and at once when the tab comes
+ * back after that long. Skipped while one of the user's own actions is saving (that action refreshes anyway).
+ * Client state survives: filters, open rows and unsaved drafts stay; only rows whose server data changed re-mount.
+ */
+function useLiveRefresh(refresh: () => void, paused: boolean) {
+  const pausedRef = useRef(paused);
+  pausedRef.current = paused;
+  useEffect(() => {
+    const every = LIVE_REFRESH_SECONDS * 1000;
+    let last = Date.now();
+    const tick = () => {
+      if (document.visibilityState !== 'visible' || pausedRef.current) return;
+      last = Date.now();
+      refresh();
+    };
+    const id = setInterval(tick, every);
+    const onVisible = () => { if (Date.now() - last >= every) tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', onVisible); };
+  }, [refresh]);
+}
+
+/** Ids that appeared since the previous render of the list (not on first load); cleared after 10 s. */
+function useArrivals(ids: string[]): Set<string> {
+  const seen = useRef<Set<string> | null>(null);
+  const [fresh, setFresh] = useState<Set<string>>(() => new Set());
+  const key = ids.join(',');
+  useEffect(() => {
+    const current = key ? key.split(',') : [];
+    if (seen.current === null) { seen.current = new Set(current); return; }
+    const added = current.filter((id) => !seen.current!.has(id));
+    for (const id of added) seen.current.add(id);
+    if (added.length === 0) return;
+    setFresh(new Set(added));
+    const t = setTimeout(() => setFresh(new Set()), 10_000);
+    return () => clearTimeout(t);
+  }, [key]);
+  return fresh;
 }
 
 /** The lead's preferred call times under the phone number; "Jetzt erreichbar" while one of them is open (Berlin time). */
@@ -148,6 +191,32 @@ export function LeadTable({ views, currentUserId, truncated, now: serverNow }: {
   const [open, setOpen] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; retryForce?: string } | null>(null);
   const [pending, start] = useTransition();
+  const [refreshing, startRefresh] = useTransition();
+  const refresh = useMemo(() => () => startRefresh(() => router.refresh()), [router]);
+  useLiveRefresh(refresh, pending);
+  const fresh = useArrivals(useMemo(() => views.map((v) => v.id), [views]));
+  const freshCount = fresh.size;
+  const asOf = formatBerlin(new Date(serverNow).toISOString()).split(' ')[1];
+  // Sticky toolbar (xl+): its height feeds the column headings' offset; a sentinel at the end of the filters tells when it is stuck.
+  const toolbar = useRef<HTMLDivElement>(null);
+  const sentinel = useRef<HTMLDivElement>(null);
+  const [toolbarHeight, setToolbarHeight] = useState(48);
+  const [stuck, setStuck] = useState(false);
+  useEffect(() => {
+    const bar = toolbar.current;
+    const mark = sentinel.current;
+    if (!bar || !mark) return;
+    const size = new ResizeObserver(() => setToolbarHeight(bar.offsetHeight));
+    size.observe(bar);
+    const seen = new IntersectionObserver(([e]) => setStuck(!e.isIntersecting));
+    seen.observe(mark);
+    return () => { size.disconnect(); seen.disconnect(); };
+  }, []);
+  const backToFilters = () => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+    document.getElementById('lead-search')?.focus({ preventScroll: true });
+  };
 
   const rows = useMemo(() => sortRows(applyFilters(views, f, currentUserId), f.sort, f.dir), [views, f, currentUserId]);
   // Tab counts: every other filter applied, the status filter itself left out (otherwise the other tabs read 0).
@@ -182,7 +251,7 @@ export function LeadTable({ views, currentUserId, truncated, now: serverNow }: {
     }));
 
   const th = (key: SortKey, label: string) => (
-    <th scope="col" className="px-3 py-2.5 text-left"
+    <th scope="col" className={`${stickyTh} px-3 py-2.5 text-left`}
       aria-sort={f.sort === key ? (f.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
       <button type="button" className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.08em] text-muted hover:text-ink"
         onClick={() => setF((s) => ({ ...s, ...nextSort(s, key) }))}>
@@ -254,10 +323,31 @@ export function LeadTable({ views, currentUserId, truncated, now: serverNow }: {
             ))}
           </div>
         </div>
+        {/* Leaves the viewport when the filters have scrolled away: the sticky toolbar then offers "↑ Filter". */}
+        <div ref={sentinel} aria-hidden="true" />
       </section>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-[13px] text-muted">
+      <div ref={toolbar}
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-cream px-1 py-2 text-[13px] text-muted xl:sticky xl:top-0 xl:z-20 xl:-my-2">
+        {stuck && (
+          <button type="button" onClick={backToFilters} className={`${buttonClass('secondary')} hidden h-7 xl:inline-flex`}>
+            <span aria-hidden="true">↑</span> Filter
+          </button>
+        )}
         <span><span className="font-data font-medium text-ink tabular-nums">{rows.length}</span> {rows.length === 1 ? 'Anfrage' : 'Anfragen'}</span>
+        <span className="flex items-center gap-1.5" title={`Aktualisiert sich alle ${LIVE_REFRESH_SECONDS} Sekunden, solange der Tab offen ist`}>
+          <span>Stand <span className="font-data tabular-nums">{refreshing ? '…' : asOf}</span></span>
+          <button type="button" onClick={refresh} disabled={refreshing} aria-label="Liste jetzt aktualisieren"
+            className={`grid size-7 place-items-center rounded-md text-ink hover:bg-surface disabled:opacity-50 ${focusRing}`}>
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"
+              className={`size-4 ${refreshing ? 'motion-safe:animate-spin' : ''}`}>
+              <path d="M16 10a6 6 0 1 1-1.8-4.3M16 4v3.5h-3.5" />
+            </svg>
+          </button>
+        </span>
+        <span aria-live="polite" className="font-medium text-slate">
+          {freshCount > 0 && `${freshCount} ${freshCount === 1 ? 'neue Anfrage' : 'neue Anfragen'} eingegangen`}
+        </span>
         <span className="flex items-center gap-1.5">
           <label htmlFor="lead-sort">sortiert nach</label>
           <select id="lead-sort" className={fieldClassSm} value={f.sort} onChange={(e) => setF({ ...f, ...nextSort(f, e.target.value as SortKey) })}>
@@ -295,13 +385,15 @@ export function LeadTable({ views, currentUserId, truncated, now: serverNow }: {
         </div>
       )}
 
-      <div tabIndex={0} role="region" aria-label="Anfragen" className="overflow-x-auto rounded-lg border border-hairline bg-surface">
+      {/* xl+: no own scroll box, so the column headings can stick to the page under the toolbar. */}
+      <div tabIndex={0} role="region" aria-label="Anfragen" style={{ '--toolbar-h': `${toolbarHeight}px` } as React.CSSProperties}
+        className="overflow-x-auto rounded-lg border border-hairline bg-surface xl:overflow-visible">
         <table className="min-w-full text-sm">
-          <thead className="border-b border-hairline bg-paper">
+          <thead>
             <tr>
               {th('created_at', 'Eingang')}{th('name', 'Interessent')}{th('area', 'Standort')}{th('project', 'Vorhaben')}
               {th('channel', 'Kanal')}{th('status', 'Status')}
-              <th scope="col" className="px-3 py-2.5"><span className="sr-only">Aktionen</span></th>
+              <th scope="col" className={`${stickyTh} px-3 py-2.5`}><span className="sr-only">Aktionen</span></th>
             </tr>
           </thead>
           <tbody>
@@ -310,7 +402,7 @@ export function LeadTable({ views, currentUserId, truncated, now: serverNow }: {
               // The key includes the server-side editable values: after router.refresh() the row's local form state
               // (status select, reason, note) re-initialises from the fresh data instead of showing stale values.
               return (
-                <FragmentRow key={`${l.id}|${l.status}|${l.disqualify_reason ?? ''}|${l.sales_note ?? ''}`} lead={l} mine={mine} open={open === l.id} pending={pending} now={now}
+                <FragmentRow key={`${l.id}|${l.status}|${l.disqualify_reason ?? ''}|${l.sales_note ?? ''}`} lead={l} mine={mine} open={open === l.id} pending={pending} now={now} fresh={fresh.has(l.id)}
                   onToggle={() => setOpen(open === l.id ? null : l.id)}
                   onClaim={() => run(() => claimLeadAction(l.id), l.id)} onRelease={() => run(() => releaseLeadAction(l.id))}
                   onStatus={(s, r) => run(() => setStatusAction(l.id, s, r))} onNote={(n) => run(() => setNoteAction(l.id, n))} />
@@ -330,7 +422,7 @@ export function LeadTable({ views, currentUserId, truncated, now: serverNow }: {
 }
 
 function FragmentRow(props: {
-  lead: LeadView; mine: boolean; open: boolean; pending: boolean; now: number; onToggle: () => void; onClaim: () => void; onRelease: () => void;
+  lead: LeadView; mine: boolean; open: boolean; pending: boolean; now: number; fresh: boolean; onToggle: () => void; onClaim: () => void; onRelease: () => void;
   onStatus: (s: LeadStatus, r: DisqualifyReason | null) => Promise<boolean>; onNote: (n: string) => void;
 }) {
   const { lead: l } = props;
@@ -345,7 +437,8 @@ function FragmentRow(props: {
   const place = placeLines(l);
   return (
     <>
-      <tr className={`border-t border-hairline align-top first:border-t-0 ${props.open ? 'bg-paper' : 'hover:bg-paper/70'}`}>
+      <tr className={`border-t border-hairline align-top transition-colors duration-1000 first:border-t-0 ${
+        props.fresh ? 'bg-slate-wash/60 shadow-[inset_3px_0_0_var(--color-slate)]' : props.open ? 'bg-paper' : 'hover:bg-paper/70'}`}>
         <td className={`${cell} whitespace-nowrap font-data text-[13px] tabular-nums`}>
           {date}<div className="text-muted">{time}</div>
           {waiting && (
