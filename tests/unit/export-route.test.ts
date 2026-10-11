@@ -22,7 +22,7 @@ const post = (fields: Record<string, string> = {}) =>
 async function sheet(res: Response) {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load((await res.arrayBuffer()) as ArrayBuffer);
-  return wb.getWorksheet('Anfragen')!;
+  return wb.getWorksheet('Alle Daten')!;
 }
 
 async function expectErrorPage(res: Response) {
@@ -66,8 +66,12 @@ describe('POST /dashboard/export', () => {
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(res.headers.get('content-disposition')).toMatch(/^attachment; filename="standort-check-anfragen-\d{4}-\d{2}-\d{2}\.xlsx"$/);
     const ws = await sheet(res);
-    expect(ws.rowCount).toBe(2); // header + the one "gewonnen" lead
-    expect(ws.getRow(2).getCell(3).value).toBe('Neu');
+    expect(ws.rowCount).toBe(3); // group band + header + the one "gewonnen" lead
+    expect(ws.getRow(3).getCell(3).value).toBe('Neu');
+    // The overview names the exporter (from profiles) and the selection the form sent.
+    const overview = ws.workbook.getWorksheet('Übersicht')!;
+    expect(String(overview.getCell('A2').value)).toMatch(/· exportiert von Ada$/);
+    expect(overview.getCell('A3').value).toBe('Auswahl: Status: Gewonnen');
   });
 
   it('answers 500 (without row data) when the leads query fails', async () => {

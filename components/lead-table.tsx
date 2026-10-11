@@ -6,12 +6,12 @@ import { applyFilters, DEFAULT_FILTERS, filtersToSearchParams, nextSort, sortRow
 import type { LeadView } from '@/lib/leads/derive';
 import { CHANNEL_GROUPS, type ChannelGroup } from '@/lib/attribution/types';
 import { DISQUALIFY_REASONS, LEAD_STATUSES, REACHABILITY, type DisqualifyReason, type LeadStatus } from '@/lib/leads/types';
-import { DEVICE_LABELS, GEO_FLAG_LABELS, geoFlagTexts, mailStatusLabel, PROJECT_TYPE_LABELS, REACHABILITY_HOURS, REACHABILITY_LABELS, REASON_LABELS, STATE_LABELS, STATUS_LABELS } from '@/lib/labels';
+import { AREA_TONE, DEVICE_LABELS, GEO_FLAG_LABELS, geoFlagTexts, mailStatusLabel, PROJECT_TYPE_LABELS, REACHABILITY_HOURS, REACHABILITY_LABELS, REASON_LABELS, STATE_LABELS, STATUS_LABELS, STATUS_TONE } from '@/lib/labels';
 import { reachableUntil, waitingTime } from '@/lib/dashboard/urgency';
 import { DUPLICATE_WINDOW_DAYS, LIVE_REFRESH_SECONDS } from '@/lib/config/app';
 import { formatBerlin } from '@/lib/format';
 import { claimLeadAction, releaseLeadAction, setNoteAction, setStatusAction, type ActionResult } from '@/app/dashboard/actions';
-import { AddressMatch, AREA_TONE, AreaVerdict, MailBadge, STATUS_TONE, StatusBadge } from './badges';
+import { AddressMatch, AreaVerdict, MailBadge, StatusBadge } from './badges';
 import { LeadHistory } from './lead-history';
 import { Badge, Button, buttonClass, Chip, Eyebrow, fieldClass, fieldClassSm, focusRing, Segmented, toneClass, toneText } from './ui';
 

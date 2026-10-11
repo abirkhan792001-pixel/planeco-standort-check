@@ -1,12 +1,7 @@
-import type { AreaAssessment, AreaVerdict as Verdict } from '@/lib/geo/service-area';
+import type { AreaAssessment } from '@/lib/geo/service-area';
 import type { AddressQuality, LeadView } from '@/lib/leads/derive';
-import { ADDRESS_TEXT, AREA_TEXT, geoFlagTexts, mailStatusLabel, STATUS_LABELS, type LabelTone } from '@/lib/labels';
+import { ADDRESS_TEXT, AREA_TEXT, AREA_TONE, geoFlagTexts, mailStatusLabel, STATUS_LABELS, STATUS_TONE, type LabelTone } from '@/lib/labels';
 import { Badge, DistanceBar, toneText } from './ui';
-
-/** Verdict tone, shared by the table and the "Gebiet" filter chips so the dots match. */
-export const AREA_TONE: Record<Verdict, LabelTone> = {
-  inside: 'green', edge: 'amber', outside: 'red', unclear: 'amber', pending: 'grey', failed: 'grey', 'n/a': 'grey',
-};
 
 /** Verdict in its tone with the distance bar beside it; "12 km · Hub" below. Without a distance only the verdict. */
 export function AreaVerdict({ area }: { area: AreaAssessment }) {
@@ -37,11 +32,6 @@ export function AddressMatch({ lead }: { lead: LeadView }) {
     </span>
   );
 }
-
-/** Status tone, shared by the badge and the inline status select so both read the same. */
-export const STATUS_TONE: Record<LeadView['status'], LabelTone> = {
-  neu: 'blue', in_bearbeitung: 'amber', qualifiziert: 'green', gewonnen: 'green', nicht_qualifiziert: 'grey', verloren: 'grey',
-};
 
 export function StatusBadge({ status, title }: { status: LeadView['status']; title?: string }) {
   return <Badge tone={STATUS_TONE[status]} title={title}>{STATUS_LABELS[status]}</Badge>;
