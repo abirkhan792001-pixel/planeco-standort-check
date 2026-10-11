@@ -48,6 +48,16 @@ export const ADDRESS_TEXT: Record<AddressQuality, string> = {
 };
 
 export type LabelTone = 'green' | 'amber' | 'red' | 'grey' | 'blue';
+
+/** Area verdict tone: the dashboard's verdict text and filter dots, and the export's Gebiet cells. */
+export const AREA_TONE: Record<AreaVerdict, LabelTone> = {
+  inside: 'green', edge: 'amber', outside: 'red', unclear: 'amber', pending: 'grey', failed: 'grey', 'n/a': 'grey',
+};
+
+/** Status tone: the dashboard badge and inline select, and the export's Status cells. */
+export const STATUS_TONE: Record<LeadStatus, LabelTone> = {
+  neu: 'blue', in_bearbeitung: 'amber', qualifiziert: 'green', gewonnen: 'green', nicht_qualifiziert: 'grey', verloren: 'grey',
+};
 export type MailStatusLabel = { text: string; tone: LabelTone; title?: string };
 
 const SKIP_LABELS: Record<string, Omit<MailStatusLabel, 'title'>> = {

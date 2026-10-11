@@ -73,7 +73,8 @@ export async function POST(req: NextRequest) {
   try {
     const views = deriveLeadViews(rows, profiles.data ?? [], ownHost());
     const sorted = sortRows(applyFilters(views, f, user.id), f.sort, f.dir);
-    body = await buildLeadsWorkbook(sorted);
+    const exporter = (profiles.data ?? []).find((p) => p.id === user.id)?.display_name ?? null;
+    body = await buildLeadsWorkbook(sorted, { filters: f, exportedAt: new Date(), exporter });
   } catch (e) {
     console.error('export: building the workbook failed', { message: (e as Error).message });
     return errorPage(500);
