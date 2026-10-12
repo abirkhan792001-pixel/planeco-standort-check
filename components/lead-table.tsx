@@ -11,7 +11,7 @@ import { reachableUntil, waitingTime } from '@/lib/dashboard/urgency';
 import { DUPLICATE_WINDOW_DAYS, LIVE_REFRESH_SECONDS } from '@/lib/config/app';
 import { formatBerlin } from '@/lib/format';
 import { claimLeadAction, releaseLeadAction, setNoteAction, setStatusAction, type ActionResult } from '@/app/dashboard/actions';
-import { AddressMatch, AreaVerdict, MailBadge, StatusBadge } from './badges';
+import { AddressMatch, AreaIcon, AreaVerdict, MailBadge, StatusBadge } from './badges';
 import { LeadHistory } from './lead-history';
 import { Badge, Button, buttonClass, Chip, Eyebrow, fieldClass, fieldClassSm, focusRing, Segmented, toneClass, toneText } from './ui';
 
@@ -360,7 +360,8 @@ export function LeadTable({ views, currentUserId, truncated, now: serverNow }: {
           <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Gebiet">
             <Eyebrow className="mr-1.5">Gebiet</Eyebrow>
             {AREA_OPTIONS.map(([v, label]) => (
-              <Chip key={v} pressed={f.areas.includes(v)} dot={AREA_TONE[v]} onClick={() => setF({ ...f, areas: toggle(f.areas, v) })}>{label}</Chip>
+              <Chip key={v} pressed={f.areas.includes(v)} tone={AREA_TONE[v]} icon={(on) => <AreaIcon verdict={v} inverted={on} />}
+                onClick={() => setF({ ...f, areas: toggle(f.areas, v) })}>{label}</Chip>
             ))}
           </div>
         </div>

@@ -25,6 +25,9 @@
   --color-brick-wash: #F6DFD9;
   --color-slate: #2B5674;
   --color-slate-wash: #E0E9F1;
+  /* Violet: only for "Unklar – bitte prüfen", so no two area verdicts share a colour. */
+  --color-plum: #6B3F8F;
+  --color-plum-wash: #EEE6F5;
   --color-stone-wash: #E8EBE3;
 }
 

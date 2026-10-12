@@ -47,11 +47,14 @@ export const ADDRESS_TEXT: Record<AddressQuality, string> = {
   ambiguous: 'Mehrdeutig', pending: 'Wird geprüft', 'n/a': '—',
 };
 
-export type LabelTone = 'green' | 'amber' | 'red' | 'grey' | 'blue';
+export type LabelTone = 'green' | 'amber' | 'red' | 'grey' | 'blue' | 'violet';
 
-/** Area verdict tone: the dashboard's verdict text and filter dots, and the export's Gebiet cells. */
+/**
+ * Area verdict tone: the dashboard's verdict line and filter chips, and the export's Gebiet cells. Every verdict a
+ * filter offers has its own colour (and its own symbol in the dashboard, see AreaIcon), so none can be mistaken.
+ */
 export const AREA_TONE: Record<AreaVerdict, LabelTone> = {
-  inside: 'green', edge: 'amber', outside: 'red', unclear: 'amber', pending: 'grey', failed: 'grey', 'n/a': 'grey',
+  inside: 'green', edge: 'amber', outside: 'red', unclear: 'violet', pending: 'blue', failed: 'grey', 'n/a': 'grey',
 };
 
 /** Status tone: the dashboard badge and inline select, and the export's Status cells. */
