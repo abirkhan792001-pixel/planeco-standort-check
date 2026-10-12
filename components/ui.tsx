@@ -33,27 +33,46 @@ export const fieldClass = `h-9 rounded-md border border-line bg-surface px-2.5 t
 /** The same field one step smaller, for controls inside a line of text (e.g. "sortiert nach"). */
 export const fieldClassSm = `h-7 rounded-md border border-line bg-surface px-1.5 text-[13px] text-ink ${focusRing}`;
 
+// Tone maps. Contrast is pinned in tests/unit/contrast.test.ts: text on its wash and white on the solid >= 4.5:1,
+// the solid as a border >= 3:1 on white and cream.
 export const toneClass: Record<LabelTone, string> = {
   green: 'bg-moss-wash text-moss', amber: 'bg-ochre-wash text-ochre', red: 'bg-brick-wash text-brick',
-  grey: 'bg-stone-wash text-muted', blue: 'bg-slate-wash text-slate',
+  grey: 'bg-stone-wash text-muted', blue: 'bg-slate-wash text-slate', violet: 'bg-plum-wash text-plum',
 };
 /** Tone as text colour only (on white or paper; every value reaches >= 4.5:1). */
 export const toneText: Record<LabelTone, string> = {
-  green: 'text-moss', amber: 'text-ochre', red: 'text-brick', grey: 'text-muted', blue: 'text-slate',
+  green: 'text-moss', amber: 'text-ochre', red: 'text-brick', grey: 'text-muted', blue: 'text-slate', violet: 'text-plum',
 };
-/** Tone as a solid dot, for legends and filter chips. */
-export const toneDot: Record<LabelTone, string> = {
-  green: 'bg-moss', amber: 'bg-ochre', red: 'bg-brick', grey: 'bg-line', blue: 'bg-slate',
+/** Tone as a solid fill (white text or a white symbol on it). */
+export const toneSolid: Record<LabelTone, string> = {
+  green: 'bg-moss', amber: 'bg-ochre', red: 'bg-brick', grey: 'bg-muted', blue: 'bg-slate', violet: 'bg-plum',
+};
+/** A tone chip at rest (tinted, outlined in the tone) and pressed (solid, white text). */
+const toneChip: Record<LabelTone, { rest: string; pressed: string }> = {
+  green: { rest: 'border-moss bg-moss-wash text-moss', pressed: 'border-moss bg-moss text-white' },
+  amber: { rest: 'border-ochre bg-ochre-wash text-ochre', pressed: 'border-ochre bg-ochre text-white' },
+  red: { rest: 'border-brick bg-brick-wash text-brick', pressed: 'border-brick bg-brick text-white' },
+  grey: { rest: 'border-muted bg-stone-wash text-muted', pressed: 'border-muted bg-muted text-white' },
+  blue: { rest: 'border-slate bg-slate-wash text-slate', pressed: 'border-slate bg-slate text-white' },
+  violet: { rest: 'border-plum bg-plum-wash text-plum', pressed: 'border-plum bg-plum text-white' },
 };
 
-/** A toggle filter. aria-pressed carries the state; pressed fills the chip (a luminance change, not only a hue). */
-export function Chip({ pressed, dot, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { pressed: boolean; dot?: LabelTone }) {
+/**
+ * A toggle filter. aria-pressed carries the state. Neutral by default; with a `tone` the chip carries its colour at
+ * rest (tint + outline) and fills solid when pressed, so the state is a luminance change, not only a hue. `icon`
+ * receives whether the chip is pressed, so a symbol can invert with it.
+ */
+export function Chip({ pressed, tone, icon, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & {
+  pressed: boolean; tone?: LabelTone; icon?: (pressed: boolean) => React.ReactNode;
+}) {
+  const look = tone
+    ? `${pressed ? toneChip[tone].pressed : `${toneChip[tone].rest} hover:brightness-95`} font-medium`
+    : pressed ? 'border-ink bg-ink text-white' : 'border-hairline bg-surface text-ink hover:border-line';
   return (
     <button type="button" aria-pressed={pressed}
-      className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition-colors ${focusRing} ${
-        pressed ? 'border-ink bg-ink text-white' : 'border-hairline bg-surface text-ink hover:border-line'}`}
+      className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[13px] transition-colors ${focusRing} ${look} ${icon ? 'pl-1' : ''}`}
       {...props}>
-      {dot && <span aria-hidden="true" className={`size-2 rounded-full ${toneDot[dot]} ${pressed ? 'ring-1 ring-white/70' : ''}`} />}
+      {icon?.(pressed)}
       {children}
     </button>
   );

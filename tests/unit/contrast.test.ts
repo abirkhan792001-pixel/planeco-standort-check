@@ -54,3 +54,23 @@ describe('resting control boundaries meet WCAG 1.4.11 non-text contrast (>= 3:1)
     ['line on paper (option cards, icon cell)', token('paper')],
   ])('%s', (_label, bg) => expect(contrast(token('line'), bg)).toBeGreaterThanOrEqual(3));
 });
+
+/** Verdict and status tones (components/ui.tsx toneChip/toneClass): tinted at rest, solid when a chip is pressed. */
+const TONES = [
+  ['green (Im Gebiet)', 'moss', 'moss-wash'],
+  ['amber (Randlage)', 'ochre', 'ochre-wash'],
+  ['red (Außerhalb)', 'brick', 'brick-wash'],
+  ['violet (Unklar)', 'plum', 'plum-wash'],
+  ['blue (Wird geprüft)', 'slate', 'slate-wash'],
+  ['grey (Prüfung fehlgeschlagen)', 'muted', 'stone-wash'],
+] as const;
+
+describe('verdict tones: text, pressed chips and outlines', () => {
+  it.each(TONES)('%s: tone text on its wash ≥ 4.5', (_l, solid, wash) => expect(contrast(token(solid), token(wash))).toBeGreaterThanOrEqual(4.5));
+  it.each(TONES)('%s: white text/symbol on the solid ≥ 4.5', (_l, solid) => expect(contrast(WHITE, token(solid))).toBeGreaterThanOrEqual(4.5));
+  it.each(TONES)('%s: outline ≥ 3 against white and cream (WCAG 1.4.11)', (_l, solid) => {
+    expect(contrast(token(solid), WHITE)).toBeGreaterThanOrEqual(3);
+    expect(contrast(token(solid), token('cream'))).toBeGreaterThanOrEqual(3);
+  });
+  it('the six area verdicts use six different solids', () => expect(new Set(TONES.map(([, solid]) => token(solid))).size).toBe(6));
+});

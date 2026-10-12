@@ -34,8 +34,8 @@ export type ExportMeta = { filters?: Filters; exportedAt?: Date; exporter?: stri
 const FONT = 'Arial';
 const ARGB = { ink: 'FF22403C', cream: 'FFF3F5EB', hairline: 'FFDCE1D5', muted: 'FF5A6A62', white: 'FFFFFFFF' };
 // Same tones as the dashboard (globals.css): text colour on its wash reaches >= 4.5:1.
-const WASH: Record<LabelTone, string> = { green: 'FFE2EEE5', amber: 'FFF5E8C4', red: 'FFF6DFD9', grey: 'FFE8EBE3', blue: 'FFE0E9F1' };
-const TONE_TEXT: Record<LabelTone, string> = { green: 'FF2E6A4C', amber: 'FF7A4E00', red: 'FF93321F', grey: 'FF5A6A62', blue: 'FF2B5674' };
+const WASH: Record<LabelTone, string> = { green: 'FFE2EEE5', amber: 'FFF5E8C4', red: 'FFF6DFD9', grey: 'FFE8EBE3', blue: 'FFE0E9F1', violet: 'FFEEE6F5' };
+const TONE_TEXT: Record<LabelTone, string> = { green: 'FF2E6A4C', amber: 'FF7A4E00', red: 'FF93321F', grey: 'FF5A6A62', blue: 'FF2B5674', violet: 'FF6B3F8F' };
 const DATE_FMT = 'dd.mm.yyyy hh:mm';
 
 /** Berlin wall-clock time as an Excel date. Excel dates have no zone, so the cell shows exactly these digits. */
@@ -408,10 +408,11 @@ export async function buildLeadsWorkbook(rows: LeadView[], meta: ExportMeta = {}
   section('Farben');
   const legend: [LabelTone, string][] = [
     ['green', 'Im Gebiet · Qualifiziert · Gewonnen'],
-    ['amber', 'Randlage oder Unklar · In Bearbeitung · wartet seit 24 Std. · Mail-Hinweis'],
+    ['amber', 'Randlage · In Bearbeitung · wartet seit 24 Std. · Mail-Hinweis'],
     ['red', 'Außerhalb · wartet seit 48 Std. · Mail fehlgeschlagen'],
-    ['blue', 'Neu'],
-    ['grey', 'Nicht qualifiziert · Verloren · Prüfung läuft oder fehlgeschlagen'],
+    ['violet', 'Unklar – bitte prüfen'],
+    ['blue', 'Neu · Wird geprüft'],
+    ['grey', 'Nicht qualifiziert · Verloren · Prüfung fehlgeschlagen'],
   ];
   for (const [tone, text] of legend) {
     ws.mergeCells(row, 1, row, 3);
